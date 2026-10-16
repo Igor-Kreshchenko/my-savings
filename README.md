@@ -72,8 +72,10 @@ all-time value charts, current UAH valuation, PnL and rate-period statistics.
 When balance events exist, PnL shows the FX component separately from cash
 flows; a percentage return is omitted when the API cannot calculate it
 without misrepresenting those cash flows. The app also includes theme
-switching, API-token settings, and a schema-validated client with TanStack
-Query hooks.
+switching, API-token settings, a rate history table, and a deposit/withdrawal
+form. Balance event amounts are entered in USD and submitted as integer cents;
+successful events invalidate analytics queries so dashboard values refresh.
+The schema-validated client uses TanStack Query hooks.
 
 ## Web app setup
 

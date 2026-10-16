@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import type { AnalyticsResponse, Position } from '@my-savings/shared';
 import {
   CartesianGrid,
@@ -11,8 +11,14 @@ import {
 } from 'recharts';
 import { getApiToken } from '../../api/settings.js';
 import { ApiError } from '../../api/client.js';
-import { useAnalytics, usePositions } from '../../api/queries.js';
+import {
+  useAnalytics,
+  useCreateBalanceEvent,
+  usePositions,
+  useRates,
+} from '../../api/queries.js';
 import { addCalendarDays, getTodayInKyiv } from '../../lib/dates.js';
+import { parseUsdAmountToCents } from './parse-usd-cents.js';
 
 const periods = [
   { label: '7d', days: 7 },
@@ -161,6 +167,219 @@ function ChartTooltip({
   );
 }
 
+function RateHistory({
+  position,
+  today,
+}: {
+  position: Position;
+  today: string;
+}) {
+  const ratesQuery = useRates(
+    { from: position.baseDate, to: today },
+    { enabled: true },
+  );
+
+  return (
+    <section className="panel history-panel" aria-labelledby="history-heading">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">Exchange rates</p>
+          <h2 id="history-heading">Rate history</h2>
+        </div>
+      </div>
+      {ratesQuery.isPending ? (
+        <p className="panel-message" role="status">
+          Loading rate history…
+        </p>
+      ) : ratesQuery.isError ? (
+        <div className="panel-message" role="alert">
+          <p>{getDashboardErrorMessage(ratesQuery.error)}</p>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => void ratesQuery.refetch()}
+          >
+            Try again
+          </button>
+        </div>
+      ) : ratesQuery.data.length === 0 ? (
+        <p className="panel-message">
+          No exchange rates have been saved for this position yet.
+        </p>
+      ) : (
+        <div className="table-scroll">
+          <table className="history-table">
+            <thead>
+              <tr>
+                <th scope="col">Date</th>
+                <th scope="col">Rate (UAH / USD)</th>
+                <th scope="col">Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...ratesQuery.data]
+                .sort((left, right) => right.date.localeCompare(left.date))
+                .map((rate) => (
+                  <tr key={`${rate.date}-${rate.currency}`}>
+                    <td>{formatDate(rate.date, fullDateFormatter)}</td>
+                    <td>{rateFormatter.format(rate.rate)}</td>
+                    <td>{rate.source}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="chart-caption">
+        Shows published rates only; weekends and holidays have no separate NBU
+        rate.
+      </p>
+    </section>
+  );
+}
+
+function BalanceEventForm({
+  position,
+  today,
+}: {
+  position: Position;
+  today: string;
+}) {
+  const [eventType, setEventType] = useState<'deposit' | 'withdrawal'>(
+    'deposit',
+  );
+  const [amount, setAmount] = useState('');
+  const [date, setDate] = useState(today);
+  const [note, setNote] = useState('');
+  const [amountError, setAmountError] = useState<string>();
+  const eventMutation = useCreateBalanceEvent(position.id);
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    const amountCents = parseUsdAmountToCents(amount);
+    if (amountCents === null) {
+      setAmountError(
+        'Enter an amount greater than zero with up to 2 decimals.',
+      );
+      return;
+    }
+
+    setAmountError(undefined);
+    const trimmedNote = note.trim();
+    eventMutation.mutate({
+      date,
+      deltaCents: eventType === 'deposit' ? amountCents : -amountCents,
+      ...(trimmedNote.length > 0 ? { note: trimmedNote } : {}),
+    });
+  }
+
+  return (
+    <section
+      className="panel balance-event-panel"
+      aria-labelledby="event-heading"
+    >
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">Balance</p>
+          <h2 id="event-heading">Add deposit or withdrawal</h2>
+        </div>
+      </div>
+      <form className="balance-event-form" onSubmit={handleSubmit}>
+        <label>
+          <span>Transaction</span>
+          <select
+            value={eventType}
+            onChange={(event) =>
+              setEventType(
+                event.target.value === 'withdrawal' ? 'withdrawal' : 'deposit',
+              )
+            }
+          >
+            <option value="deposit">Deposit</option>
+            <option value="withdrawal">Withdrawal</option>
+          </select>
+        </label>
+        <label>
+          <span>Amount (USD)</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            autoComplete="off"
+            placeholder="0.00"
+            value={amount}
+            onChange={(event) => {
+              setAmount(event.target.value);
+              setAmountError(undefined);
+            }}
+            aria-invalid={amountError !== undefined}
+            aria-describedby={amountError ? 'balance-amount-error' : undefined}
+            required
+          />
+        </label>
+        <label>
+          <span>Date</span>
+          <input
+            type="date"
+            min={position.baseDate}
+            max={today}
+            value={date}
+            onChange={(event) => setDate(event.target.value)}
+            required
+          />
+        </label>
+        <label className="balance-note-field">
+          <span>Note (optional)</span>
+          <input
+            type="text"
+            maxLength={500}
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+          />
+        </label>
+        {amountError !== undefined && (
+          <p className="form-feedback error-feedback" id="balance-amount-error">
+            {amountError}
+          </p>
+        )}
+        {eventMutation.isError && (
+          <p className="form-feedback error-feedback" role="alert">
+            {getDashboardErrorMessage(eventMutation.error)}
+          </p>
+        )}
+        {eventMutation.isSuccess && (
+          <p className="form-feedback success-feedback" role="status">
+            Balance event recorded. Analytics have been refreshed.
+          </p>
+        )}
+        <button
+          className="primary-button balance-submit"
+          type="submit"
+          disabled={eventMutation.isPending}
+        >
+          {eventMutation.isPending
+            ? 'Saving…'
+            : `Add ${eventType === 'deposit' ? 'deposit' : 'withdrawal'}`}
+        </button>
+      </form>
+    </section>
+  );
+}
+
+function PositionTools({
+  position,
+  today,
+}: {
+  position: Position;
+  today: string;
+}) {
+  return (
+    <>
+      <RateHistory position={position} today={today} />
+      <BalanceEventForm position={position} today={today} />
+    </>
+  );
+}
+
 export function Dashboard({ onOpenSettings }: { onOpenSettings: () => void }) {
   const hasApiToken = Boolean(getApiToken());
   const positionsQuery = usePositions({ enabled: hasApiToken });
@@ -235,12 +454,50 @@ export function Dashboard({ onOpenSettings }: { onOpenSettings: () => void }) {
       analyticsQuery.error.code === 'RATE_DATA_NOT_FOUND'
     ) {
       return (
+        <div className="dashboard">
+          <section className="dashboard-state empty-state">
+            <p className="eyebrow">No rate history</p>
+            <h1>Waiting for exchange rates</h1>
+            <p>
+              The API has no saved rate for this position yet. Rates are
+              synchronized automatically on weekdays.
+            </p>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => void analyticsQuery.refetch()}
+            >
+              Refresh data
+            </button>
+          </section>
+          <PositionTools position={selectedPosition} today={today} />
+        </div>
+      );
+    }
+
+    return (
+      <div className="dashboard">
+        <ErrorState
+          title="Your savings history could not be loaded"
+          message={getDashboardErrorMessage(analyticsQuery.error)}
+          onRetry={() => void analyticsQuery.refetch()}
+        />
+        <PositionTools position={selectedPosition} today={today} />
+      </div>
+    );
+  }
+
+  const analytics = analyticsQuery.data;
+  const latest = analytics.series.at(-1);
+  if (latest === undefined) {
+    return (
+      <div className="dashboard">
         <section className="dashboard-state empty-state">
           <p className="eyebrow">No rate history</p>
-          <h1>Waiting for exchange rates</h1>
+          <h1>No data for this period</h1>
           <p>
-            The API has no saved rate for this position yet. Rates are
-            synchronized automatically on weekdays.
+            There are no saved exchange rates for the selected position yet. Try
+            again after the API has synchronized rates.
           </p>
           <button
             className="secondary-button"
@@ -250,37 +507,8 @@ export function Dashboard({ onOpenSettings }: { onOpenSettings: () => void }) {
             Refresh data
           </button>
         </section>
-      );
-    }
-
-    return (
-      <ErrorState
-        title="Your savings history could not be loaded"
-        message={getDashboardErrorMessage(analyticsQuery.error)}
-        onRetry={() => void analyticsQuery.refetch()}
-      />
-    );
-  }
-
-  const analytics = analyticsQuery.data;
-  const latest = analytics.series.at(-1);
-  if (latest === undefined) {
-    return (
-      <section className="dashboard-state empty-state">
-        <p className="eyebrow">No rate history</p>
-        <h1>No data for this period</h1>
-        <p>
-          There are no saved exchange rates for the selected position yet. Try
-          again after the API has synchronized rates.
-        </p>
-        <button
-          className="secondary-button"
-          type="button"
-          onClick={() => void analyticsQuery.refetch()}
-        >
-          Refresh data
-        </button>
-      </section>
+        <PositionTools position={selectedPosition} today={today} />
+      </div>
     );
   }
 
@@ -472,6 +700,8 @@ export function Dashboard({ onOpenSettings }: { onOpenSettings: () => void }) {
           </div>
         </div>
       </section>
+
+      <PositionTools position={selectedPosition} today={today} />
     </div>
   );
 }
