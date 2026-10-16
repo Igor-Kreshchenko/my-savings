@@ -4,7 +4,7 @@ Personal FX savings tracker monorepo.
 
 ## Requirements
 
-- Node.js 20 or newer
+- Node.js 20.6 or newer
 - pnpm 9.15.9
 
 ## Workspace
@@ -12,6 +12,21 @@ Personal FX savings tracker monorepo.
 - `apps/api` — Fastify API
 - `apps/web` — React and Vite web application
 - `packages/shared` — shared TypeScript package and Zod schemas
+
+## API setup
+
+Copy `apps/api/.env.example` to `apps/api/.env` and set `API_TOKEN`. The API's
+`dev`, `start` and `db:migrate` scripts load that file automatically.
+`DB_PATH`, `PORT` and `TZ` are optional; they default to
+`./data/my-savings.sqlite`, `3000` and `Europe/Kyiv`.
+
+Apply the initial SQLite migration from the repository root:
+
+```sh
+pnpm --filter @my-savings/api db:migrate
+```
+
+The API health endpoint is available at `GET /health`.
 
 ## Commands
 
