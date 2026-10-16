@@ -2,6 +2,11 @@ import Fastify from 'fastify';
 import type { AppConfig } from './config.js';
 import { createDatabase } from './db/client.js';
 import { AppError } from './lib/app-error.js';
+import { getTodayInTimezone } from './lib/dates.js';
+import { NbuRateProvider } from './modules/rates/nbu.client.js';
+import { RatesRepository } from './modules/rates/rates.repository.js';
+import { RatesService } from './modules/rates/rates.service.js';
+import { startRatesJob } from './modules/rates/rates.job.js';
 import { registerHealthRoutes } from './modules/health/routes.js';
 
 function getStatusCode(error: unknown): number | undefined {
@@ -22,17 +27,38 @@ function getErrorMessage(error: unknown): string {
 
 export function createServer(
   config: AppConfig,
-  options: { logger?: boolean } = {},
+  options: { logger?: boolean; enableRatesJobs?: boolean } = {},
 ) {
   const database = createDatabase(config);
   const app = Fastify({
     logger: options.logger ?? { level: 'info' },
   });
+  let ratesJob: ReturnType<typeof startRatesJob> | undefined;
 
   app.decorate('db', database.db);
   app.addHook('onClose', async () => {
+    ratesJob?.stop();
     database.sqlite.close();
   });
+
+  if (options.enableRatesJobs ?? true) {
+    app.addHook('onReady', async () => {
+      const ratesService = new RatesService(
+        new RatesRepository(database.db),
+        new NbuRateProvider(),
+        () => getTodayInTimezone(config.TZ),
+      );
+
+      try {
+        const result = await ratesService.catchUp();
+        app.log.info({ result }, 'Startup rate catch-up completed');
+      } catch (error) {
+        app.log.error({ err: error }, 'Startup rate catch-up failed');
+      }
+
+      ratesJob = startRatesJob(ratesService, app.log, config.TZ);
+    });
+  }
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof AppError) {

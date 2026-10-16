@@ -18,7 +18,7 @@ beforeEach(() => {
       PORT: 3000,
       TZ: 'Europe/Kyiv',
     },
-    { logger: false },
+    { logger: false, enableRatesJobs: false },
   );
 });
 
