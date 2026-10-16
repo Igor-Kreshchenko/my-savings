@@ -94,6 +94,18 @@ static application assets, caches successful GET API responses for up to seven
 days, and persists the TanStack Query cache in localStorage for offline
 viewing. When a new service worker is waiting, the app offers an Update action.
 
+### Install on Android
+
+Open the deployed HTTPS URL in Chrome on Android, tap the three-dot menu, then
+select **Install app** (or **Add to Home screen**) and confirm. To check PWA
+readiness, open the same URL in desktop Chrome, run a Lighthouse audit with the
+**Progressive Web App** category selected, and review its recommendations.
+
+To verify offline viewing, open the app while online and wait for the dashboard
+data to load, then enable airplane mode or set Chrome DevTools Network to
+**Offline** and reload. Previously cached data should remain viewable; requests
+that need the API, such as adding a balance event, require a connection.
+
 ## Production deployment (EC2)
 
 The deployment files assume the repository is installed at
