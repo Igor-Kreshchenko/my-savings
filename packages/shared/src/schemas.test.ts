@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   analyticsQuerySchema,
   analyticsResponseSchema,
+  createBalanceEventSchema,
   rateSchema,
   ratesQuerySchema,
 } from './schemas.js';
@@ -43,6 +44,15 @@ describe('shared schemas', () => {
     expect(
       ratesQuerySchema.safeParse({ from: '2026-10-17', to: '2026-10-16' })
         .success,
+    ).toBe(false);
+  });
+
+  it('rejects unsafe integer amounts for balance events', () => {
+    expect(
+      createBalanceEventSchema.safeParse({
+        date: '2026-10-16',
+        deltaCents: Number.MAX_SAFE_INTEGER + 1,
+      }).success,
     ).toBe(false);
   });
 

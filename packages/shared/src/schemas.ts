@@ -58,6 +58,7 @@ export const balanceEventSchema = z.object({
   deltaCents: z
     .number()
     .int()
+    .safe()
     .refine((value) => value !== 0),
   note: z.string().nullable(),
 });
@@ -67,6 +68,7 @@ export const createBalanceEventSchema = z.object({
   deltaCents: z
     .number()
     .int()
+    .safe()
     .refine((value) => value !== 0),
   note: z.string().nullable().optional(),
 });

@@ -1,5 +1,5 @@
-import type { Rate } from '@my-savings/shared';
-import { and, desc, eq, gte, lte } from 'drizzle-orm';
+import type { Rate, RatesQuery } from '@my-savings/shared';
+import { and, asc, desc, eq, gte, lte } from 'drizzle-orm';
 import type { createDatabase } from '../../db/client.js';
 import { rates } from '../../db/schema.js';
 import { listWeekdays } from '../../lib/dates.js';
@@ -33,6 +33,32 @@ export class RatesRepository {
       .limit(1)
       .get();
     return result?.date;
+  }
+
+  list(query: RatesQuery, currency = 'USD'): Rate[] {
+    const conditions = [eq(rates.currency, currency)];
+    if (query.from !== undefined) {
+      conditions.push(gte(rates.date, query.from));
+    }
+    if (query.to !== undefined) {
+      conditions.push(lte(rates.date, query.to));
+    }
+
+    return this.db
+      .select()
+      .from(rates)
+      .where(and(...conditions))
+      .orderBy(asc(rates.date))
+      .all();
+  }
+
+  listThrough(date: string, currency = 'USD'): Rate[] {
+    return this.db
+      .select()
+      .from(rates)
+      .where(and(eq(rates.currency, currency), lte(rates.date, date)))
+      .orderBy(asc(rates.date))
+      .all();
   }
 
   getMissingBusinessDates(

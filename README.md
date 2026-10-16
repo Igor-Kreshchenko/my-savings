@@ -29,6 +29,20 @@ pnpm --filter @my-savings/api db:migrate
 
 The API health endpoint is available at `GET /health`.
 
+All API routes except `GET /health` require a valid Authorization header
+authenticated with the configured `API_TOKEN`. The authenticated endpoints are:
+
+- `GET /positions` and `POST /positions` to list or create USD positions.
+  Creating a position backfills available NBU rates from `baseDate` through
+  today; record its initial balance with an event.
+- `POST /positions/:id/events` to record a non-zero deposit or withdrawal in
+  integer USD cents. Withdrawals that would make the balance negative are
+  rejected.
+- `GET /rates?from=YYYY-MM-DD&to=YYYY-MM-DD` to list stored rates; either date
+  bound can be omitted.
+- `GET /analytics?positionId=<id>&from=YYYY-MM-DD&to=YYYY-MM-DD` to retrieve
+  daily valuations, period changes, PnL and rate statistics.
+
 Rates are fetched from the NBU at 16:00 on weekdays in `Europe/Kyiv`. The API
 checks for missing weekdays on startup; holidays without an NBU rate are not
 written. To backfill from a date, run this from the repository root:
@@ -52,5 +66,5 @@ pnpm lint
 pnpm format:check
 ```
 
-The rates provider and synchronization job are implemented; other application
-features are still under development.
+The API endpoints, rates provider and synchronization job are implemented;
+the web application is still under development.
