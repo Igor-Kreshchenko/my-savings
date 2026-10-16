@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { getApiToken, hasSavedApiToken, saveApiToken } from './api/settings.js';
+import { Dashboard } from './features/dashboard/Dashboard.js';
 
 type Theme = 'light' | 'dark';
 
@@ -157,43 +158,7 @@ export function App() {
           </section>
         ) : (
           <>
-            <section className="welcome">
-              <p className="eyebrow">Your personal FX tracker</p>
-              <h1>Know what your savings are worth.</h1>
-              <p className="welcome-copy">
-                Track your USD balance in UAH, follow exchange-rate movements,
-                and see how your savings change over time.
-              </p>
-            </section>
-            <section
-              className="overview-card"
-              aria-labelledby="overview-heading"
-            >
-              <div className="overview-topline">
-                <div className="currency-badge" aria-hidden="true">
-                  $
-                </div>
-                <span className="connection-status">
-                  {getApiToken() ? 'API token configured' : 'Setup required'}
-                </span>
-              </div>
-              <h2 id="overview-heading">Your savings overview</h2>
-              <p className="empty-copy">
-                The dashboard is ready. Connect your API to start viewing your
-                balance, rate history, and performance.
-              </p>
-              <button
-                className="primary-button"
-                type="button"
-                onClick={() => setSettingsOpen(true)}
-              >
-                Configure API access
-              </button>
-            </section>
-            <p className="privacy-note">
-              Your data stays on your server. This app does not use third-party
-              analytics.
-            </p>
+            <Dashboard onOpenSettings={() => setSettingsOpen(true)} />
           </>
         )}
       </main>

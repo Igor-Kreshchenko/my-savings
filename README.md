@@ -67,8 +67,13 @@ pnpm format:check
 ```
 
 The API endpoints, rates provider and synchronization job are implemented.
-The web app provides a responsive shell, theme switching, API-token settings,
-and a schema-validated client with TanStack Query hooks.
+The web app provides a responsive savings dashboard with 7/30/90-day and
+all-time value charts, current UAH valuation, PnL and rate-period statistics.
+When balance events exist, PnL shows the FX component separately from cash
+flows; a percentage return is omitted when the API cannot calculate it
+without misrepresenting those cash flows. The app also includes theme
+switching, API-token settings, and a schema-validated client with TanStack
+Query hooks.
 
 ## Web app setup
 

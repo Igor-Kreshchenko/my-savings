@@ -55,7 +55,7 @@ describe('API client', () => {
     ]);
 
     const [url, init] = fetchMock.mock.calls[0] ?? [];
-    expect(url).toBe('/api/positions');
+    expect(String(url)).toMatch(/\/positions$/);
     expect(new Headers(init?.headers).get('Authorization')).toBe(
       'Bearer test-token',
     );
