@@ -581,7 +581,16 @@ a:focus-visible {
   margin-top: 21px;
 }
 
-.balance-event-form label {
+.position-create-form {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.balance-event-form label,
+.position-create-form label {
   display: grid;
   align-content: start;
   gap: 7px;
@@ -591,7 +600,8 @@ a:focus-visible {
 }
 
 .balance-event-form input,
-.balance-event-form select {
+.balance-event-form select,
+.position-create-form input {
   width: 100%;
   min-height: 46px;
   padding: 0 12px;
@@ -608,6 +618,10 @@ a:focus-visible {
 }
 
 .balance-note-field {
+  grid-column: 1 / -1;
+}
+
+.position-create-form .form-feedback {
   grid-column: 1 / -1;
 }
 
@@ -867,12 +881,19 @@ a:focus-visible {
     margin-top: 17px;
   }
 
+  .position-create-form {
+    grid-template-columns: 1fr;
+    gap: 13px;
+  }
+
   .balance-note-field,
-  .form-feedback {
+  .form-feedback,
+  .position-create-form .form-feedback {
     grid-column: auto;
   }
 
-  .balance-submit {
+  .balance-submit,
+  .position-create-form .balance-submit {
     width: 100%;
   }
 }

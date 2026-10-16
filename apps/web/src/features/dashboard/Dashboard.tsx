@@ -14,6 +14,7 @@ import { ApiError } from '../../api/client.js';
 import {
   useAnalytics,
   useCreateBalanceEvent,
+  useCreatePositionWithInitialBalance,
   usePositions,
   useRates,
 } from '../../api/queries.js';
@@ -120,7 +121,49 @@ function ErrorState({
   );
 }
 
-function EmptyState({ onOpenSettings }: { onOpenSettings: () => void }) {
+function EmptyState({
+  onOpenSettings,
+  today,
+}: {
+  onOpenSettings: () => void;
+  today: string;
+}) {
+  const [baseDate, setBaseDate] = useState(today);
+  const [baseRate, setBaseRate] = useState('');
+  const [initialBalance, setInitialBalance] = useState('');
+  const [note, setNote] = useState('');
+  const [formError, setFormError] = useState<string>();
+  const createMutation = useCreatePositionWithInitialBalance();
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    const initialBalanceCents = parseUsdAmountToCents(initialBalance);
+    const parsedBaseRate = Number(baseRate.trim().replace(',', '.'));
+
+    if (initialBalanceCents === null) {
+      setFormError(
+        'Enter an initial balance greater than zero, up to 2 decimals.',
+      );
+      return;
+    }
+    if (!Number.isFinite(parsedBaseRate) || parsedBaseRate <= 0) {
+      setFormError('Enter a valid base exchange rate greater than zero.');
+      return;
+    }
+
+    setFormError(undefined);
+    const trimmedNote = note.trim();
+    createMutation.mutate({
+      position: {
+        currency: 'USD',
+        baseDate,
+        baseRate: parsedBaseRate,
+        ...(trimmedNote.length > 0 ? { note: trimmedNote } : {}),
+      },
+      initialBalanceCents,
+    });
+  }
+
   return (
     <section className="dashboard-state empty-state">
       <div className="empty-state-icon" aria-hidden="true">
@@ -129,11 +172,73 @@ function EmptyState({ onOpenSettings }: { onOpenSettings: () => void }) {
       <p className="eyebrow">Ready when you are</p>
       <h1>No savings position yet</h1>
       <p>
-        Create a position and add its initial balance to start tracking your USD
-        savings in UAH.
+        Add your starting date, exchange rate and USD balance to begin tracking
+        your savings in UAH.
       </p>
+      <form className="position-create-form" onSubmit={handleSubmit}>
+        <label>
+          <span>Starting date</span>
+          <input
+            type="date"
+            max={today}
+            value={baseDate}
+            onChange={(event) => setBaseDate(event.target.value)}
+            required
+          />
+        </label>
+        <label>
+          <span>Base exchange rate (UAH / USD)</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            autoComplete="off"
+            placeholder="For example, 41.25"
+            value={baseRate}
+            onChange={(event) => setBaseRate(event.target.value)}
+            required
+          />
+        </label>
+        <label>
+          <span>Initial balance (USD)</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            autoComplete="off"
+            placeholder="0.00"
+            value={initialBalance}
+            onChange={(event) => setInitialBalance(event.target.value)}
+            required
+          />
+        </label>
+        <label>
+          <span>Note (optional)</span>
+          <input
+            type="text"
+            maxLength={500}
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+          />
+        </label>
+        {formError !== undefined && (
+          <p className="form-feedback error-feedback" role="alert">
+            {formError}
+          </p>
+        )}
+        {createMutation.isError && (
+          <p className="form-feedback error-feedback" role="alert">
+            {getDashboardErrorMessage(createMutation.error)}
+          </p>
+        )}
+        <button
+          className="primary-button balance-submit"
+          type="submit"
+          disabled={createMutation.isPending}
+        >
+          {createMutation.isPending ? 'Creating…' : 'Create position'}
+        </button>
+      </form>
       <button
-        className="secondary-button"
+        className="text-button empty-settings-button"
         type="button"
         onClick={onOpenSettings}
       >
@@ -441,7 +546,7 @@ export function Dashboard({ onOpenSettings }: { onOpenSettings: () => void }) {
   }
 
   if (selectedPosition === undefined) {
-    return <EmptyState onOpenSettings={onOpenSettings} />;
+    return <EmptyState onOpenSettings={onOpenSettings} today={today} />;
   }
 
   if (analyticsQuery.isPending) {

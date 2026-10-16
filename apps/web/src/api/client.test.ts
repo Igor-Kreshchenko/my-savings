@@ -55,10 +55,45 @@ describe('API client', () => {
     ]);
 
     const [url, init] = fetchMock.mock.calls[0] ?? [];
-    expect(String(url)).toMatch(/\/positions$/);
+    expect(String(url)).toBe('/api/positions');
     expect(new Headers(init?.headers).get('Authorization')).toBe(
       'Bearer test-token',
     );
+  });
+
+  it('creates a USD position with its base date and rate', async () => {
+    localValues.set('my-savings.api-token', 'test-token');
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: 3,
+          currency: 'USD',
+          baseDate: '2026-10-16',
+          baseRate: 41.25,
+          note: 'Savings',
+        }),
+        { status: 201 },
+      ),
+    );
+
+    await expect(
+      api.createPosition({
+        currency: 'USD',
+        baseDate: '2026-10-16',
+        baseRate: 41.25,
+        note: 'Savings',
+      }),
+    ).resolves.toMatchObject({ id: 3, baseRate: 41.25 });
+
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(String(url)).toBe('/api/positions');
+    expect(init?.method).toBe('POST');
+    expect(JSON.parse(String(init?.body))).toEqual({
+      currency: 'USD',
+      baseDate: '2026-10-16',
+      baseRate: 41.25,
+      note: 'Savings',
+    });
   });
 
   it('rejects successful responses that do not match the shared schema', async () => {
