@@ -66,5 +66,18 @@ pnpm lint
 pnpm format:check
 ```
 
-The API endpoints, rates provider and synchronization job are implemented;
-the web application is still under development.
+The API endpoints, rates provider and synchronization job are implemented.
+The web app provides a responsive shell, theme switching, API-token settings,
+and a schema-validated client with TanStack Query hooks.
+
+## Web app setup
+
+Copy `apps/web/.env.example` to `apps/web/.env.local` to configure the API URL.
+The Vite development server proxies `/api` to `http://127.0.0.1:3000` by
+default. Override `VITE_API_BASE_URL` when the API is hosted elsewhere. You can
+set `VITE_API_TOKEN` as a local default or enter a token in the app's Settings;
+the browser-stored token takes precedence.
+
+Values with the `VITE_` prefix are embedded in the browser bundle. Do not use
+`VITE_API_TOKEN` for a public deployment or treat it as a secret; the API token
+configured in the browser can also be read by scripts running on that origin.
