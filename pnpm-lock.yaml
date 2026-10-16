@@ -35,6 +35,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@my-savings/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       better-sqlite3:
         specifier: ^11.8.1
         version: 11.10.0
