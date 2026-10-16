@@ -88,3 +88,8 @@ the browser-stored token takes precedence.
 Values with the `VITE_` prefix are embedded in the browser bundle. Do not use
 `VITE_API_TOKEN` for a public deployment or treat it as a secret; the API token
 configured in the browser can also be read by scripts running on that origin.
+
+The production web build is installable as a standalone PWA. It precaches
+static application assets, caches successful GET API responses for up to seven
+days, and persists the TanStack Query cache in localStorage for offline
+viewing. When a new service worker is waiting, the app offers an Update action.

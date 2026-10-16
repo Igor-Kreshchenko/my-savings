@@ -733,6 +733,44 @@ a:focus-visible {
   border-color: color-mix(in srgb, var(--negative) 35%, var(--border));
 }
 
+.pwa-update-prompt {
+  position: fixed;
+  z-index: 10;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 12px 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.pwa-update-button,
+.pwa-dismiss-button {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pwa-update-button {
+  background: var(--accent);
+  color: #fff;
+}
+
+.pwa-dismiss-button {
+  background: transparent;
+  color: var(--muted);
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

@@ -8,11 +8,13 @@ import type { DehydratedState } from '@tanstack/react-query';
 import { useEffect, type PropsWithChildren } from 'react';
 
 const QUERY_CACHE_STORAGE_KEY = 'my-savings.query-cache';
+const QUERY_CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
+      gcTime: QUERY_CACHE_MAX_AGE,
       retry: 1,
     },
   },
