@@ -27,6 +27,20 @@ afterEach(() => {
 });
 
 describe('API client', () => {
+  it('clears all server data with an authenticated DELETE request', async () => {
+    localValues.set('my-savings.api-token', 'test-token');
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ status: 'cleared' }), { status: 200 }),
+    );
+
+    await expect(api.clearAllData()).resolves.toEqual({ status: 'cleared' });
+
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(String(url)).toBe('/api/data');
+    expect(init?.method).toBe('DELETE');
+    expect(new Headers(init?.headers).has('Authorization')).toBe(true);
+  });
+
   it('sends the saved bearer token and validates successful responses', async () => {
     localValues.set('my-savings.api-token', 'test-token');
     fetchMock.mockResolvedValue(

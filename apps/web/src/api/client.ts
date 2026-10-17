@@ -2,6 +2,7 @@ import {
   analyticsQuerySchema,
   analyticsResponseSchema,
   balanceEventSchema,
+  clearDataResponseSchema,
   createBalanceEventSchema,
   createPositionSchema,
   positionSchema,
@@ -12,6 +13,7 @@ import type {
   AnalyticsQuery,
   AnalyticsResponse,
   BalanceEvent,
+  ClearDataResponse,
   CreateBalanceEventInput,
   CreatePositionInput,
   Position,
@@ -142,6 +144,10 @@ function toSearchParams(
 }
 
 export const api = {
+  clearAllData(): Promise<ClearDataResponse> {
+    return requestJson('/data', clearDataResponseSchema, { method: 'DELETE' });
+  },
+
   getPositions(): Promise<Position[]> {
     return requestJson('/positions', positionsSchema);
   },

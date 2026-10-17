@@ -45,6 +45,43 @@ describe('API routes', () => {
     expect(response.json()).toEqual({ status: 'ok' });
   });
 
+  it('clears rates, positions, and balance events through authenticated DELETE /data', async () => {
+    app.db
+      .insert(positions)
+      .values({ currency: 'USD', baseDate: today, baseRate: 41.5, note: null })
+      .run();
+    app.db
+      .insert(balanceEvents)
+      .values({ positionId: 1, date: today, deltaCents: 100_000, note: null })
+      .run();
+    app.db
+      .insert(rates)
+      .values({
+        date: today,
+        currency: 'USD',
+        rate: 41.5,
+        source: 'NBU',
+        fetchedAt,
+      })
+      .run();
+
+    const unauthorized = await app.inject({ method: 'DELETE', url: '/data' });
+    expect(unauthorized.statusCode).toBe(401);
+    expect(app.db.select().from(positions).all()).toHaveLength(1);
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/data',
+      headers: authHeaders,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ status: 'cleared' });
+    expect(app.db.select().from(balanceEvents).all()).toEqual([]);
+    expect(app.db.select().from(positions).all()).toEqual([]);
+    expect(app.db.select().from(rates).all()).toEqual([]);
+  });
+
   it('serves GET /positions and requires a Bearer token', async () => {
     const unauthorized = await app.inject({
       method: 'GET',

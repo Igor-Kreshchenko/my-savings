@@ -336,6 +336,42 @@ a:focus-visible {
   font-weight: 600;
 }
 
+.error-notice {
+  color: var(--negative);
+}
+
+.danger-zone {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+
+.danger-zone h2 {
+  margin: 8px 0;
+  font-size: 18px;
+}
+
+.danger-button {
+  min-height: 46px;
+  padding: 0 17px;
+  border: 1px solid var(--negative);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--negative);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.danger-button:hover:not(:disabled) {
+  background: var(--negative);
+  color: #fff;
+}
+
+.danger-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .dashboard {
   display: grid;
   gap: 20px;

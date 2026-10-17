@@ -6,6 +6,7 @@ import type {
   RatesQuery,
 } from '@my-savings/shared';
 import { api } from './client.js';
+import { clearPersistedQueryCache } from './query-provider.js';
 
 interface QueryOptions {
   enabled?: boolean;
@@ -51,6 +52,13 @@ export function useCreateBalanceEvent(positionId: number) {
     mutationFn: (input: CreateBalanceEventInput) =>
       api.createBalanceEvent(positionId, input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['analytics'] }),
+  });
+}
+
+export function useClearAllData() {
+  return useMutation({
+    mutationFn: api.clearAllData,
+    onSuccess: clearPersistedQueryCache,
   });
 }
 

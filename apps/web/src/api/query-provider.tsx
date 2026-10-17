@@ -65,6 +65,14 @@ function persistQueryCache(): void {
   }
 }
 
+export async function clearPersistedQueryCache(): Promise<void> {
+  queryClient.removeQueries();
+  window.localStorage.removeItem(QUERY_CACHE_STORAGE_KEY);
+  if ('caches' in window) {
+    await window.caches.delete('api-get-cache');
+  }
+}
+
 export function QueryProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     const unsubscribe = queryClient

@@ -14,6 +14,8 @@ import { registerPositionRoutes } from './modules/positions/routes.js';
 import { PositionsRepository } from './modules/positions/positions.repository.js';
 import { registerRatesRoutes } from './modules/rates/routes.js';
 import { registerAnalyticsRoutes } from './modules/analytics/routes.js';
+import { DataRepository } from './modules/data/data.repository.js';
+import { registerDataRoutes } from './modules/data/routes.js';
 
 function getStatusCode(error: unknown): number | undefined {
   if (
@@ -79,6 +81,7 @@ export function createServer(
 
   const ratesRepository = new RatesRepository(database.db);
   const positionsRepository = new PositionsRepository(database.db);
+  const dataRepository = new DataRepository(database.db);
   const ratesService = new RatesService(
     ratesRepository,
     options.rateProvider ?? new NbuRateProvider(),
@@ -153,6 +156,7 @@ export function createServer(
   registerPositionRoutes(app, positionsRepository, ratesService);
   registerRatesRoutes(app, ratesRepository);
   registerAnalyticsRoutes(app, positionsRepository, ratesRepository);
+  registerDataRoutes(app, dataRepository);
 
   return app;
 }

@@ -123,3 +123,7 @@ export const analyticsResponseSchema = z.object({
     movingAverage30: z.number().positive().nullable(),
   }),
 });
+
+export const clearDataResponseSchema = z.object({
+  status: z.literal('cleared'),
+});

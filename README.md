@@ -42,6 +42,8 @@ authenticated with the configured `API_TOKEN`. The authenticated endpoints are:
   bound can be omitted.
 - `GET /analytics?positionId=<id>&from=YYYY-MM-DD&to=YYYY-MM-DD` to retrieve
   daily valuations, period changes, PnL and rate statistics.
+- `DELETE /data` to permanently delete all stored rates, positions, and
+  balance events. This endpoint requires the API bearer token.
 
 Rates are fetched from the NBU at 16:00 on weekdays in `Europe/Kyiv`. The API
 checks for missing weekdays on startup; holidays without an NBU rate are not
@@ -77,6 +79,14 @@ form. Balance event amounts are entered in USD and submitted as integer cents;
 successful events invalidate analytics queries so dashboard values refresh.
 The schema-validated client uses TanStack Query hooks.
 
+### Run from a Linux desktop icon
+
+The `scripts/start-local.sh` launcher starts the API and web app, waits for the
+API health check, and opens the dashboard in the default browser. It requires
+the project dependencies to be installed and `apps/api/.env` to be configured.
+Keep the terminal window open while using the app; press Ctrl+C there to stop
+the local servers.
+
 ## Web app setup
 
 Copy `apps/web/.env.example` to `apps/web/.env.local` to configure the API URL.
@@ -93,6 +103,8 @@ The production web build is installable as a standalone PWA. It precaches
 static application assets, caches successful GET API responses for up to seven
 days, and persists the TanStack Query cache in localStorage for offline
 viewing. When a new service worker is waiting, the app offers an Update action.
+The API settings page includes a confirmed action to delete all server-side
+rates, positions, and balance events; this cannot be undone.
 
 ### Install on Android
 

@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { getApiToken, hasSavedApiToken, saveApiToken } from './api/settings.js';
+import { useClearAllData } from './api/queries.js';
 import { Dashboard } from './features/dashboard/Dashboard.js';
 
 type Theme = 'light' | 'dark';
@@ -26,6 +27,7 @@ export function App() {
   const [savedTokenOverride, setSavedTokenOverride] =
     useState(hasSavedApiToken);
   const [notice, setNotice] = useState('');
+  const clearData = useClearAllData();
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -59,6 +61,27 @@ export function App() {
         ? 'Using the build-time API token.'
         : 'Saved token cleared. Configure VITE_API_TOKEN to provide a default.',
     );
+  }
+
+  function handleClearAllData(): void {
+    const confirmed = window.confirm(
+      'Delete all saved exchange rates, positions, and deposits/withdrawals from the database? This cannot be undone.',
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    clearData.reset();
+    setNotice('');
+    clearData.mutate(undefined, {
+      onSuccess: () => setNotice('All application data was deleted.'),
+      onError: (error) =>
+        setNotice(
+          error instanceof Error
+            ? `Could not delete data: ${error.message}`
+            : 'Could not delete data. Please try again.',
+        ),
+    });
   }
 
   return (
@@ -151,10 +174,34 @@ export function App() {
               trusted device.
             </p>
             {notice && (
-              <p className="form-notice" role="status">
+              <p
+                className={
+                  clearData.isError ? 'form-notice error-notice' : 'form-notice'
+                }
+                role={clearData.isError ? 'alert' : 'status'}
+              >
                 {notice}
               </p>
             )}
+            <section
+              className="danger-zone"
+              aria-labelledby="clear-data-heading"
+            >
+              <p className="eyebrow">Danger zone</p>
+              <h2 id="clear-data-heading">Clear all application data</h2>
+              <p className="settings-description">
+                Permanently deletes saved rates, positions, and all deposits and
+                withdrawals from the database.
+              </p>
+              <button
+                className="danger-button"
+                type="button"
+                onClick={handleClearAllData}
+                disabled={clearData.isPending}
+              >
+                {clearData.isPending ? 'Deleting data…' : 'Clear all data'}
+              </button>
+            </section>
           </section>
         ) : (
           <>
