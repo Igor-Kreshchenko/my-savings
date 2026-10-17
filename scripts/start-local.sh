@@ -7,9 +7,37 @@ health_url="${app_url}/api/health"
 
 cd "$app_dir"
 
+dev_pid=""
+opener_pid=""
+
+cleanup() {
+  local exit_status=$?
+
+  if [[ -n "$opener_pid" ]]; then
+    kill "$opener_pid" 2>/dev/null || true
+  fi
+  if [[ -n "$dev_pid" ]]; then
+    kill "$dev_pid" 2>/dev/null || true
+    wait "$dev_pid" 2>/dev/null || true
+  fi
+
+  if [[ $exit_status -ne 0 && -t 0 ]]; then
+    printf '\nMy Savings stopped with exit code %s.\n' "$exit_status" >&2
+    read -r -p "Press Enter to close this window..." _ || true
+  fi
+}
+
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
   source "$HOME/.nvm/nvm.sh"
-  nvm use --silent default >/dev/null
+  for node_major in 24 22 20; do
+    if nvm use --silent "$node_major" >/dev/null 2>&1; then
+      break
+    fi
+  done
 fi
 
 if ! command -v node >/dev/null 2>&1; then
@@ -42,21 +70,11 @@ if ! command -v curl >/dev/null 2>&1 || ! command -v xdg-open >/dev/null 2>&1; t
   exit 1
 fi
 
-"${pnpm_command[@]}" dev &
+"${pnpm_command[@]}" --parallel \
+  --filter @my-savings/api \
+  --filter @my-savings/web \
+  dev &
 dev_pid=$!
-opener_pid=""
-
-cleanup() {
-  if [[ -n "$opener_pid" ]]; then
-    kill "$opener_pid" 2>/dev/null || true
-  fi
-  kill "$dev_pid" 2>/dev/null || true
-  wait "$dev_pid" 2>/dev/null || true
-}
-
-trap cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
 
 (
   for _ in {1..60}; do
