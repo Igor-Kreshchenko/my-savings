@@ -3,7 +3,7 @@
 Reply to the developer in Russian. Code, identifiers, comments, commit messages and docs are in English.
 
 ## Purpose
-Personal PWA (single user, no Google Play) that tracks a fixed USD amount, fetches the daily USD/UAH rate from the NBU, and shows the UAH equivalent, day-over-day change, PnL vs a base point, and rate history charts.
+Personal PWA (single user, no Google Play) that tracks a fixed USD amount, fetches the USD/UAH buy and sell rates from Monobank, and shows the UAH equivalent, day-over-day change, PnL vs a base point, and rate history charts. NBU rates are retained as estimated gap fillers.
 
 ## Stack (do not substitute without asking)
 - Monorepo: pnpm workspaces. `apps/api`, `apps/web`, `packages/shared`.
@@ -30,12 +30,13 @@ packages/shared/src/{schemas.ts,types.ts}
 ## Domain rules
 - Dates are `YYYY-MM-DD` strings in Europe/Kyiv. Never use `Date` arithmetic for day logic without a helper in `lib/dates.ts`.
 - USD amounts are stored as integer cents (`*_cents`). Rates are `REAL` (UAH per 1 USD). Round only at presentation (2 decimals for money, 4 for rates).
-- Weekends/holidays have no new NBU rate: forward-fill the last known rate in analytics. Do not write synthetic rows.
-- All rate writes are idempotent: `INSERT ... ON CONFLICT(date, currency) DO UPDATE`.
+- Monobank has no historical endpoint; fetch the current USD/UAH rate on the three-hour schedule and upsert today's row. Do not write synthetic weekend rows.
+- Analytics prefers `mono.rate_buy`; when a date has no Monobank row, use the NBU rate or forward-fill the previous rate, and set `estimated: true`.
+- All rate writes are idempotent: `INSERT ... ON CONFLICT(date, currency, source) DO UPDATE`.
 
 ## Database schema
 ```sql
-rates (date TEXT, currency TEXT, rate REAL NOT NULL, source TEXT NOT NULL, fetched_at TEXT NOT NULL, PRIMARY KEY (date, currency));
+rates (date TEXT, currency TEXT, rate_buy REAL NOT NULL, rate_sell REAL, source TEXT NOT NULL, fetched_at TEXT NOT NULL, PRIMARY KEY (date, currency, source));
 positions (id INTEGER PRIMARY KEY, currency TEXT NOT NULL, base_date TEXT NOT NULL, base_rate REAL NOT NULL, note TEXT);
 balance_events (id INTEGER PRIMARY KEY, position_id INTEGER NOT NULL REFERENCES positions(id), date TEXT NOT NULL, delta_cents INTEGER NOT NULL, note TEXT);
 ```
@@ -43,13 +44,15 @@ balance_events (id INTEGER PRIMARY KEY, position_id INTEGER NOT NULL REFERENCES 
 - Amount at date D = `SUM(delta_cents) WHERE date <= D`. No materialized daily snapshots; compute on read.
 - Schema changes only via Drizzle migrations.
 
-## NBU API
+## Rate sources
+- Monobank endpoint: `https://api.monobank.ua/bank/currency` (no authentication). Select `currencyCodeA=840`, `currencyCodeB=980`, validate the response with zod, and store `rateBuy`/`rateSell` as source `mono`.
+- On HTTP 429, do not issue another Monobank request for at least 60 seconds. Requests must time out.
+- Never fetch Monobank rates from a request handler; serve rates already in SQLite.
+- Fetch Monobank rates every 3 hours in `Europe/Kyiv`. Repeated updates on a date replace that date's Monobank row, preserving the latest (closing) quote.
 - Endpoint: `https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?valcode=USD&date=YYYYMMDD&json`
 - Response is an array; use `[0].rate`. Empty array = no rate for that date.
-- Client: timeout 10s, 3 retries with backoff, zod-validated response. Isolate in `modules/rates/nbu.client.ts` behind a `RateProvider` interface so another source can be added later (`source` column).
-- Cron: `0 16 * * 1-5`, timezone Europe/Kyiv. On failure retry every 10 min, max 3 times.
-- On server start run catch-up: fetch every missing date from the last stored date to today.
-- Provide a `backfill` CLI script (`from` date -> today).
+- NBU remains in `modules/rates/nbu.client.ts` behind the same `RateProvider` interface, with timeout, retries, and zod validation; it is only used for startup catch-up, user-created position gap filling, and the `backfill` CLI.
+- The NBU `backfill` fills weekday dates missing from source `nbu`; it must not use Monobank rows to decide which NBU dates are missing.
 
 ## Analytics formulas
 For date t: A(t) = USD amount, R(t) = rate, V(t) = A(t) * R(t).
@@ -63,10 +66,12 @@ For date t: A(t) = USD amount, R(t) = rate, V(t) = A(t) * R(t).
 ## REST API
 - `GET /health` (no auth)
 - `GET /rates?from&to`
+- `POST /rates/refresh` (authenticated) returns `{ date, rateBuy, rateSell, fetchedAt, stale }`; use the stored Monobank row if refreshed within 5 minutes, otherwise refresh Monobank with single-flight and a 60-second request limit, falling back to a stale stored row on provider errors.
 - `GET /positions`, `POST /positions`
 - `POST /positions/:id/events`
-- `GET /analytics?positionId&from&to` -> `{ series: [{date, rate, usd, uah}], daily, period, pnl, stats }`
+- `GET /analytics?positionId&from&to` -> `{ series: [{date, rate, usd, uah, estimated}], daily, period, pnl, stats }`; `rate` is Monobank `rate_buy` when present and each estimate is marked.
 - All except `/health` require `Authorization: Bearer <API_TOKEN>`. CORS limited to the app origin (or disabled when nginx serves both).
+- The web app calls the refresh endpoint on startup and when the tab becomes visible, at most once per 60 seconds, then invalidates analytics and rates. It displays the fetched time in Europe/Kyiv and keeps persisted cached data available with an offline/outdated status if refresh fails. The service worker must not intercept or cache the POST refresh request.
 
 ## Frontend rules
 - Mobile-first, one-column layout, touch targets >= 44px, supports dark mode.
@@ -76,7 +81,7 @@ For date t: A(t) = USD amount, R(t) = rate, V(t) = A(t) * R(t).
 - PWA: manifest (`display: standalone`, icons 192/512, theme color), precache static assets, runtime cache for GET API data.
 
 ## Testing and quality
-- Vitest for calc, services and the NBU client (mock fetch). One integration test per route with an in-memory SQLite.
+- Vitest for calc, services, Monobank and NBU clients (mock fetch). One integration test per route with an in-memory SQLite.
 - ESLint + Prettier, `pnpm -r typecheck` and `pnpm -r test` must pass before suggesting a change is complete.
 
 ## Do / Don't

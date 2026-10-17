@@ -77,8 +77,9 @@ export class NbuRateProvider implements RateProvider {
         return rateSchema.parse({
           date: validDate,
           currency: 'USD',
-          rate: entry.rate,
-          source: 'NBU',
+          rateBuy: entry.rate,
+          rateSell: null,
+          source: 'nbu',
           fetchedAt: new Date().toISOString(),
         });
       } catch (error) {

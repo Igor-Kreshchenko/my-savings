@@ -4,6 +4,7 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceDot,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -16,6 +17,7 @@ import {
   useCreateBalanceEvent,
   useCreatePositionWithInitialBalance,
   usePositions,
+  useRateRefresh,
   useRates,
 } from '../../api/queries.js';
 import { addCalendarDays, getTodayInKyiv } from '../../lib/dates.js';
@@ -61,6 +63,11 @@ const fullDateFormatter = new Intl.DateTimeFormat('uk-UA', {
   month: 'long',
   year: 'numeric',
   timeZone: 'UTC',
+});
+const rateTimeFormatter = new Intl.DateTimeFormat('uk-UA', {
+  hour: '2-digit',
+  minute: '2-digit',
+  timeZone: 'Europe/Kyiv',
 });
 
 function formatDate(date: string, formatter: Intl.DateTimeFormat): string {
@@ -267,7 +274,8 @@ function ChartTooltip({
       <strong>{label ? formatDate(label, fullDateFormatter) : ''}</strong>
       <span>{uahFormatter.format(point.uah)}</span>
       <span>{usdFormatter.format(point.usd)}</span>
-      <span>Rate {rateFormatter.format(point.rate)} UAH / USD</span>
+      <span>Rate buy {rateFormatter.format(point.rate)} UAH / USD</span>
+      {point.estimated && <span>Estimated rate</span>}
     </div>
   );
 }
@@ -317,7 +325,7 @@ function RateHistory({
             <thead>
               <tr>
                 <th scope="col">Date</th>
-                <th scope="col">Rate (UAH / USD)</th>
+                <th scope="col">Buy / sell (UAH / USD)</th>
                 <th scope="col">Source</th>
               </tr>
             </thead>
@@ -325,10 +333,17 @@ function RateHistory({
               {[...ratesQuery.data]
                 .sort((left, right) => right.date.localeCompare(left.date))
                 .map((rate) => (
-                  <tr key={`${rate.date}-${rate.currency}`}>
+                  <tr key={`${rate.date}-${rate.currency}-${rate.source}`}>
                     <td>{formatDate(rate.date, fullDateFormatter)}</td>
-                    <td>{rateFormatter.format(rate.rate)}</td>
-                    <td>{rate.source}</td>
+                    <td>
+                      {rateFormatter.format(rate.rateBuy)}
+                      {rate.rateSell === null
+                        ? ''
+                        : ` / ${rateFormatter.format(rate.rateSell)}`}
+                    </td>
+                    <td>
+                      {rate.source === 'mono' ? 'Monobank' : 'NBU fallback'}
+                    </td>
                   </tr>
                 ))}
             </tbody>
@@ -336,8 +351,8 @@ function RateHistory({
         </div>
       )}
       <p className="chart-caption">
-        Shows published rates only; weekends and holidays have no separate NBU
-        rate.
+        Monobank rates are preferred; NBU rates fill gaps. Weekends and holidays
+        carry forward the latest rate.
       </p>
     </section>
   );
@@ -487,6 +502,7 @@ function PositionTools({
 
 export function Dashboard({ onOpenSettings }: { onOpenSettings: () => void }) {
   const hasApiToken = Boolean(getApiToken());
+  const rateRefresh = useRateRefresh({ enabled: hasApiToken });
   const positionsQuery = usePositions({ enabled: hasApiToken });
   const [period, setPeriod] = useState<Period>('30d');
   const [selectedPositionId, setSelectedPositionId] = useState<number>();
@@ -495,6 +511,10 @@ export function Dashboard({ onOpenSettings }: { onOpenSettings: () => void }) {
   const selectedPosition =
     positions.find(({ id }) => id === selectedPositionId) ?? positions[0];
   const today = getTodayInKyiv();
+  const storedRatesQuery = useRates(
+    { from: selectedPosition?.baseDate ?? today, to: today },
+    { enabled: hasApiToken && selectedPosition !== undefined },
+  );
   const rangeStart =
     selectedPosition === undefined
       ? undefined
@@ -620,6 +640,11 @@ export function Dashboard({ onOpenSettings }: { onOpenSettings: () => void }) {
   const pnlAmount = analytics.pnl.netUah ?? analytics.pnl.fxUah;
   const pnlIsPositive = pnlAmount >= 0;
   const pnlPercent = analytics.pnl.netPercent;
+  const latestStoredMonobankRate = storedRatesQuery.data
+    ?.filter(({ source }) => source === 'mono')
+    .at(-1);
+  const rateFetchedAt =
+    rateRefresh.data?.fetchedAt ?? latestStoredMonobankRate?.fetchedAt;
 
   return (
     <div className="dashboard">
@@ -630,6 +655,30 @@ export function Dashboard({ onOpenSettings }: { onOpenSettings: () => void }) {
           <p className="dashboard-date">
             Updated for {formatDate(latest.date, fullDateFormatter)}
           </p>
+          <div className="rate-refresh-status">
+            {rateFetchedAt !== undefined && (
+              <span>
+                Rate as of {rateTimeFormatter.format(new Date(rateFetchedAt))}
+              </span>
+            )}
+            {(rateRefresh.data?.stale === true || rateRefresh.isError) && (
+              <span className="rate-stale-badge">Offline / outdated</span>
+            )}
+            <button
+              className="text-button rate-refresh-button"
+              type="button"
+              onClick={() => void rateRefresh.refresh()}
+              disabled={
+                rateRefresh.isRefreshing || rateRefresh.secondsUntilRefresh > 0
+              }
+            >
+              {rateRefresh.isRefreshing
+                ? 'Refreshing…'
+                : rateRefresh.secondsUntilRefresh > 0
+                  ? `Refresh in ${rateRefresh.secondsUntilRefresh}s`
+                  : 'Refresh rate'}
+            </button>
+          </div>
         </div>
         {positions.length > 1 && (
           <label className="position-select-label">
@@ -744,6 +793,20 @@ export function Dashboard({ onOpenSettings }: { onOpenSettings: () => void }) {
                 tick={{ fill: 'var(--chart-label)', fontSize: 12 }}
               />
               <Tooltip content={<ChartTooltip />} />
+              {analytics.series
+                .filter(({ estimated }) => estimated)
+                .map((point) => (
+                  <ReferenceDot
+                    key={`estimated-${point.date}`}
+                    x={point.date}
+                    y={point.uah}
+                    r={4}
+                    fill="var(--surface)"
+                    stroke="var(--accent)"
+                    strokeWidth={2}
+                    ifOverflow="discard"
+                  />
+                ))}
               <Line
                 type="monotone"
                 dataKey="uah"
@@ -758,8 +821,7 @@ export function Dashboard({ onOpenSettings }: { onOpenSettings: () => void }) {
           </ResponsiveContainer>
         </div>
         <p className="chart-caption">
-          Daily UAH value · exchange rates are carried forward on weekends and
-          holidays
+          Hollow markers indicate estimated NBU or carried-forward rates.
         </p>
       </section>
 

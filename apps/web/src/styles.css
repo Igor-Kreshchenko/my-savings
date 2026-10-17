@@ -399,6 +399,22 @@ a:focus-visible {
   font-size: 14px;
 }
 
+.rate-refresh-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.rate-stale-badge {
+  border-radius: 999px;
+  background: var(--surface-muted);
+  padding: 0.2rem 0.55rem;
+  color: var(--muted);
+}
+
 .position-select-label {
   display: grid;
   gap: 6px;

@@ -25,7 +25,23 @@ export class AnalyticsService {
     }
 
     const rateRows = this.rates.listThrough(query.to, position.currency);
-    const ratePoints = rateRows.map(({ date, rate }) => ({ date, rate }));
+    const ratesByDate = new Map<
+      string,
+      { date: string; rate: number; estimated: boolean }
+    >();
+    for (const row of rateRows) {
+      const current = ratesByDate.get(row.date);
+      if (current === undefined || row.source === 'mono') {
+        ratesByDate.set(row.date, {
+          date: row.date,
+          rate: row.rateBuy,
+          estimated: row.source !== 'mono',
+        });
+      }
+    }
+    const ratePoints = [...ratesByDate.values()].map(
+      ({ date, rate, estimated }) => ({ date, rate, estimated }),
+    );
     const filledRates = forwardFillRates(ratePoints, query.from, query.to);
     if (filledRates.length === 0) {
       throw new AppError(
@@ -38,7 +54,7 @@ export class AnalyticsService {
     const events = this.positions
       .listEvents(position.id)
       .map(({ date, deltaCents }) => ({ date, deltaCents }));
-    const series = filledRates.map(({ date, rate }) => {
+    const series = filledRates.map(({ date, rate, estimated }) => {
       const usdCents = amountAtDate(events, date);
       const usd = usdCents / 100;
       return {
@@ -46,6 +62,7 @@ export class AnalyticsService {
         rate,
         usd,
         uah: calculateValue(usdCents, rate),
+        estimated,
       };
     });
     const first = series[0];

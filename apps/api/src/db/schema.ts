@@ -11,11 +11,14 @@ export const rates = sqliteTable(
   {
     date: text('date').notNull(),
     currency: text('currency').notNull(),
-    rate: real('rate').notNull(),
+    rateBuy: real('rate_buy').notNull(),
+    rateSell: real('rate_sell'),
     source: text('source').notNull(),
     fetchedAt: text('fetched_at').notNull(),
   },
-  (table) => [primaryKey({ columns: [table.date, table.currency] })],
+  (table) => [
+    primaryKey({ columns: [table.date, table.currency, table.source] }),
+  ],
 );
 
 export const positions = sqliteTable('positions', {

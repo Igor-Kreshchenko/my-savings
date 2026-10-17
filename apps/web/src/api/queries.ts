@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   AnalyticsQuery,
   CreateBalanceEventInput,
@@ -32,6 +33,76 @@ export function useRates(query: RatesQuery = {}, options: QueryOptions = {}) {
     queryFn: () => api.getRates(query),
     ...(options.enabled === undefined ? {} : { enabled: options.enabled }),
   });
+}
+
+export function useRateRefresh(options: QueryOptions = {}) {
+  const queryClient = useQueryClient();
+  const lastAttemptAt = useRef<number>();
+  const [secondsUntilRefresh, setSecondsUntilRefresh] = useState(0);
+  const query = useQuery({
+    queryKey: ['rate-refresh'],
+    queryFn: api.refreshRate,
+    enabled: false,
+    retry: false,
+  });
+  const { refetch } = query;
+
+  const refresh = useCallback(async () => {
+    const now = Date.now();
+    const previousAttempt = lastAttemptAt.current;
+    if (
+      options.enabled === false ||
+      (previousAttempt !== undefined && now - previousAttempt < 60_000)
+    ) {
+      return;
+    }
+
+    lastAttemptAt.current = now;
+    const result = await refetch();
+    if (!result.isError) {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['analytics'] }),
+        queryClient.invalidateQueries({ queryKey: ['rates'] }),
+      ]);
+    }
+  }, [options.enabled, queryClient, refetch]);
+
+  useEffect(() => {
+    if (options.enabled === false) {
+      return;
+    }
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void refresh();
+      }
+    };
+
+    void refresh();
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () =>
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+  }, [options.enabled, refresh]);
+
+  useEffect(() => {
+    const updateCooldown = () => {
+      const elapsed = Date.now() - (lastAttemptAt.current ?? Date.now());
+      setSecondsUntilRefresh(Math.max(0, Math.ceil((60_000 - elapsed) / 1000)));
+    };
+
+    updateCooldown();
+    const interval = window.setInterval(updateCooldown, 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  return {
+    data: query.data,
+    isError: query.isError,
+    isPending: query.isPending,
+    isRefreshing: query.isFetching,
+    refresh,
+    secondsUntilRefresh,
+  };
 }
 
 export function useAnalytics(

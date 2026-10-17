@@ -14,25 +14,35 @@ export class RatesRepository {
       .insert(rates)
       .values(rate)
       .onConflictDoUpdate({
-        target: [rates.date, rates.currency],
+        target: [rates.date, rates.currency, rates.source],
         set: {
-          rate: rate.rate,
-          source: rate.source,
+          rateBuy: rate.rateBuy,
+          rateSell: rate.rateSell,
           fetchedAt: rate.fetchedAt,
         },
       })
       .run();
   }
 
-  getLatestDate(currency = 'USD'): string | undefined {
+  getLatestDate(currency = 'USD', source = 'nbu'): string | undefined {
     const result = this.db
       .select({ date: rates.date })
       .from(rates)
-      .where(eq(rates.currency, currency))
+      .where(and(eq(rates.currency, currency), eq(rates.source, source)))
       .orderBy(desc(rates.date))
       .limit(1)
       .get();
     return result?.date;
+  }
+
+  getLatestRate(currency = 'USD', source = 'mono'): Rate | undefined {
+    return this.db
+      .select()
+      .from(rates)
+      .where(and(eq(rates.currency, currency), eq(rates.source, source)))
+      .orderBy(desc(rates.date), desc(rates.fetchedAt))
+      .limit(1)
+      .get();
   }
 
   list(query: RatesQuery, currency = 'USD'): Rate[] {
@@ -48,7 +58,7 @@ export class RatesRepository {
       .select()
       .from(rates)
       .where(and(...conditions))
-      .orderBy(asc(rates.date))
+      .orderBy(asc(rates.date), asc(rates.source))
       .all();
   }
 
@@ -65,6 +75,7 @@ export class RatesRepository {
     from: string,
     to: string,
     currency = 'USD',
+    source = 'nbu',
   ): string[] {
     if (from > to) {
       return [];
@@ -77,6 +88,7 @@ export class RatesRepository {
         .where(
           and(
             eq(rates.currency, currency),
+            eq(rates.source, source),
             gte(rates.date, from),
             lte(rates.date, to),
           ),

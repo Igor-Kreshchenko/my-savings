@@ -40,14 +40,25 @@ authenticated with the configured `API_TOKEN`. The authenticated endpoints are:
   rejected.
 - `GET /rates?from=YYYY-MM-DD&to=YYYY-MM-DD` to list stored rates; either date
   bound can be omitted.
+- `POST /rates/refresh` to get the latest stored Monobank quote and refresh it
+  when it is older than five minutes. Parallel refreshes share one provider
+  request, and the previous stored quote is returned with `stale: true` if
+  Monobank is unavailable.
 - `GET /analytics?positionId=<id>&from=YYYY-MM-DD&to=YYYY-MM-DD` to retrieve
-  daily valuations, period changes, PnL and rate statistics.
+  daily valuations, period changes, PnL and rate statistics. Each series point
+  includes `estimated`; Monobank buy rates are used when available, with NBU
+  rates and carried-forward values marked as estimates.
 - `DELETE /data` to permanently delete all stored rates, positions, and
   balance events. This endpoint requires the API bearer token.
 
-Rates are fetched from the NBU at 16:00 on weekdays in `Europe/Kyiv`. The API
-checks for missing weekdays on startup; holidays without an NBU rate are not
-written. To backfill from a date, run this from the repository root:
+Monobank's USD/UAH buy and sell rates are fetched on startup and every three
+hours in `Europe/Kyiv`. The latest quote replaces that day's Monobank row; no
+Monobank request is made while serving API requests. Analytics uses the
+Monobank buy rate when available, otherwise an NBU row or a carried-forward
+rate, and flags that date as estimated. NBU remains as a historical gap filler:
+startup catch-up and position creation fill missing weekdays, and holidays
+without an NBU rate are not written. To backfill NBU rates from a date, run
+this from the repository root:
 
 ```sh
 pnpm --filter @my-savings/api rates:backfill --from 2026-01-01
@@ -68,7 +79,8 @@ pnpm lint
 pnpm format:check
 ```
 
-The API endpoints, rates provider and synchronization job are implemented.
+The API endpoints, Monobank and NBU rate providers and synchronization jobs
+are implemented.
 The web app provides a responsive savings dashboard with 7/30/90-day and
 all-time value charts, current UAH valuation, PnL and rate-period statistics.
 When balance events exist, PnL shows the FX component separately from cash

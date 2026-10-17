@@ -28,8 +28,9 @@ describe('NbuRateProvider', () => {
     expect(result).toMatchObject({
       date: '2026-10-16',
       currency: 'USD',
-      rate: 41.25,
-      source: 'NBU',
+      rateBuy: 41.25,
+      rateSell: null,
+      source: 'nbu',
     });
     expect(result?.fetchedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
@@ -72,7 +73,7 @@ describe('NbuRateProvider', () => {
     });
 
     await expect(provider.getRate('2026-10-16')).resolves.toMatchObject({
-      rate: 41.25,
+      rateBuy: 41.25,
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });

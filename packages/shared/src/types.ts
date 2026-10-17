@@ -8,10 +8,12 @@ import type {
   createPositionSchema,
   positionSchema,
   rateSchema,
+  rateRefreshResponseSchema,
   ratesQuerySchema,
 } from './schemas.js';
 
 export type Rate = z.infer<typeof rateSchema>;
+export type RateRefreshResponse = z.infer<typeof rateRefreshResponseSchema>;
 export type Position = z.infer<typeof positionSchema>;
 export type BalanceEvent = z.infer<typeof balanceEventSchema>;
 export type CreatePositionInput = z.infer<typeof createPositionSchema>;

@@ -4,6 +4,7 @@ import {
   analyticsResponseSchema,
   createBalanceEventSchema,
   rateSchema,
+  rateRefreshResponseSchema,
   ratesQuerySchema,
 } from './schemas.js';
 
@@ -13,8 +14,9 @@ describe('shared schemas', () => {
       rateSchema.parse({
         date: '2026-10-16',
         currency: 'USD',
-        rate: 41.2,
-        source: 'NBU',
+        rateBuy: 41.2,
+        rateSell: null,
+        source: 'nbu',
         fetchedAt: '2026-10-16T13:00:00.000Z',
       }).currency,
     ).toBe('USD');
@@ -22,11 +24,30 @@ describe('shared schemas', () => {
       rateSchema.safeParse({
         date: '2026-02-29',
         currency: 'USD',
-        rate: 41.2,
-        source: 'NBU',
+        rateBuy: 41.2,
+        rateSell: null,
+        source: 'nbu',
         fetchedAt: '2026-10-16T13:00:00.000Z',
       }).success,
     ).toBe(false);
+  });
+
+  it('validates a refreshed Monobank rate response', () => {
+    expect(
+      rateRefreshResponseSchema.parse({
+        date: '2026-10-16',
+        rateBuy: 41.2,
+        rateSell: null,
+        fetchedAt: '2026-10-16T13:00:00.000Z',
+        stale: true,
+      }),
+    ).toEqual({
+      date: '2026-10-16',
+      rateBuy: 41.2,
+      rateSell: null,
+      fetchedAt: '2026-10-16T13:00:00.000Z',
+      stale: true,
+    });
   });
 
   it('validates and parses request query parameters', () => {
@@ -59,7 +80,15 @@ describe('shared schemas', () => {
   it('validates the analytics response contract', () => {
     expect(
       analyticsResponseSchema.safeParse({
-        series: [{ date: '2026-10-16', rate: 41.2, usd: 100, uah: 4120 }],
+        series: [
+          {
+            date: '2026-10-16',
+            rate: 41.2,
+            usd: 100,
+            uah: 4120,
+            estimated: false,
+          },
+        ],
         daily: { uahChange: 12, rateChange: 0.002 },
         period: { uahChange: 12 },
         pnl: {

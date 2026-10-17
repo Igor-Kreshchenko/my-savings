@@ -41,6 +41,37 @@ describe('API client', () => {
     expect(new Headers(init?.headers).has('Authorization')).toBe(true);
   });
 
+  it('refreshes the stored Monobank rate with an authenticated POST', async () => {
+    localValues.set('my-savings.api-token', 'test-token');
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          date: '2026-10-16',
+          rateBuy: 41.5,
+          rateSell: 41.7,
+          fetchedAt: '2026-10-16T13:00:00.000Z',
+          stale: false,
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await expect(api.refreshRate()).resolves.toEqual({
+      date: '2026-10-16',
+      rateBuy: 41.5,
+      rateSell: 41.7,
+      fetchedAt: '2026-10-16T13:00:00.000Z',
+      stale: false,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(String(url)).toBe('/api/rates/refresh');
+    expect(init?.method).toBe('POST');
+    expect(new Headers(init?.headers).get('Authorization')).toBe(
+      'Bearer test-token',
+    );
+  });
+
   it('sends the saved bearer token and validates successful responses', async () => {
     localValues.set('my-savings.api-token', 'test-token');
     fetchMock.mockResolvedValue(

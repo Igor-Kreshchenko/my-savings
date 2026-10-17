@@ -4,6 +4,7 @@ import { addCalendarDays } from '../../lib/dates.js';
 export interface RatePoint {
   date: string;
   rate: number;
+  estimated?: boolean;
 }
 
 export interface BalanceEventPoint {
@@ -16,6 +17,7 @@ export interface DailyValuation {
   rate: number;
   usd: number;
   uah: number;
+  estimated: boolean;
 }
 
 export interface PnlBreakdown {
@@ -37,7 +39,7 @@ export function forwardFillRates(
   rates: readonly RatePoint[],
   from: string,
   to: string,
-): RatePoint[] {
+): Array<RatePoint & { estimated: boolean }> {
   const start = dateSchema.parse(from);
   const end = dateSchema.parse(to);
   if (start > end) {
@@ -48,12 +50,14 @@ export function forwardFillRates(
     .map((rate) => ({
       date: dateSchema.parse(rate.date),
       rate: assertPositiveRate(rate.rate),
+      estimated: rate.estimated ?? false,
     }))
     .sort((left, right) =>
       left.date < right.date ? -1 : left.date > right.date ? 1 : 0,
     );
 
   let currentRate: number | undefined;
+  let currentEstimated = false;
   let nextRateIndex = 0;
   while (nextRateIndex < sortedRates.length) {
     const nextRate = sortedRates[nextRateIndex];
@@ -61,10 +65,11 @@ export function forwardFillRates(
       break;
     }
     currentRate = nextRate.rate;
+    currentEstimated = nextRate.estimated;
     nextRateIndex += 1;
   }
 
-  const result: RatePoint[] = [];
+  const result: Array<RatePoint & { estimated: boolean }> = [];
   let date = start;
   while (true) {
     while (nextRateIndex < sortedRates.length) {
@@ -73,11 +78,18 @@ export function forwardFillRates(
         break;
       }
       currentRate = nextRate.rate;
+      currentEstimated = nextRate.estimated;
       nextRateIndex += 1;
     }
 
     if (currentRate !== undefined) {
-      result.push({ date, rate: currentRate });
+      if (
+        nextRateIndex === 0 ||
+        sortedRates[nextRateIndex - 1]?.date !== date
+      ) {
+        currentEstimated = true;
+      }
+      result.push({ date, rate: currentRate, estimated: currentEstimated });
     }
     if (date === end) {
       break;

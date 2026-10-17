@@ -7,8 +7,8 @@ import {
 } from './rates.job.js';
 
 describe('rates job', () => {
-  it('uses the weekday 16:00 schedule in Europe/Kyiv', () => {
-    expect(RATES_CRON_EXPRESSION).toBe('0 16 * * 1-5');
+  it('uses the every-three-hours schedule in Europe/Kyiv', () => {
+    expect(RATES_CRON_EXPRESSION).toBe('0 */3 * * *');
     expect(RATES_CRON_TIMEZONE).toBe('Europe/Kyiv');
   });
 

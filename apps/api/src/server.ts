@@ -5,6 +5,7 @@ import { createDatabase } from './db/client.js';
 import { AppError } from './lib/app-error.js';
 import { getTodayInTimezone } from './lib/dates.js';
 import { NbuRateProvider } from './modules/rates/nbu.client.js';
+import { MonobankRateProvider } from './modules/rates/monobank.client.js';
 import { RatesRepository } from './modules/rates/rates.repository.js';
 import { RatesService } from './modules/rates/rates.service.js';
 import type { RateProvider } from './modules/rates/rate-provider.js';
@@ -39,7 +40,9 @@ export function createServer(
     logger?: boolean;
     enableRatesJobs?: boolean;
     rateProvider?: RateProvider;
+    monobankRateProvider?: RateProvider;
     getToday?: () => string;
+    now?: () => Date;
   } = {},
 ) {
   const database = createDatabase(config);
@@ -87,17 +90,40 @@ export function createServer(
     options.rateProvider ?? new NbuRateProvider(),
     options.getToday ?? (() => getTodayInTimezone(config.TZ)),
   );
+  const monobankRatesService = new RatesService(
+    ratesRepository,
+    options.monobankRateProvider ?? new MonobankRateProvider(),
+    options.getToday ?? (() => getTodayInTimezone(config.TZ)),
+    options.now,
+  );
 
   if (options.enableRatesJobs ?? true) {
     app.addHook('onReady', async () => {
-      try {
-        const result = await ratesService.catchUp();
-        app.log.info({ result }, 'Startup rate catch-up completed');
-      } catch (error) {
-        app.log.error({ err: error }, 'Startup rate catch-up failed');
+      const [nbuResult, monobankResult] = await Promise.allSettled([
+        ratesService.catchUp(),
+        monobankRatesService.updateToday(),
+      ]);
+      if (nbuResult.status === 'fulfilled') {
+        app.log.info(
+          { result: nbuResult.value },
+          'NBU startup catch-up completed',
+        );
+      } else {
+        app.log.error({ err: nbuResult.reason }, 'NBU startup catch-up failed');
+      }
+      if (monobankResult.status === 'fulfilled') {
+        app.log.info(
+          { result: monobankResult.value },
+          'Monobank startup rate update completed',
+        );
+      } else {
+        app.log.error(
+          { err: monobankResult.reason },
+          'Monobank startup rate update failed',
+        );
       }
 
-      ratesJob = startRatesJob(ratesService, app.log, config.TZ);
+      ratesJob = startRatesJob(monobankRatesService, app.log, config.TZ);
     });
   }
 
@@ -154,7 +180,7 @@ export function createServer(
 
   registerHealthRoutes(app);
   registerPositionRoutes(app, positionsRepository, ratesService);
-  registerRatesRoutes(app, ratesRepository);
+  registerRatesRoutes(app, ratesRepository, monobankRatesService);
   registerAnalyticsRoutes(app, positionsRepository, ratesRepository);
   registerDataRoutes(app, dataRepository);
 

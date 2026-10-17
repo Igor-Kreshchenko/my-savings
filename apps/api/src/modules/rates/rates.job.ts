@@ -2,7 +2,7 @@ import cron, { type ScheduledTask } from 'node-cron';
 import type { FastifyBaseLogger } from 'fastify';
 import type { RatesService } from './rates.service.js';
 
-export const RATES_CRON_EXPRESSION = '0 16 * * 1-5';
+export const RATES_CRON_EXPRESSION = '0 */3 * * *';
 export const RATES_CRON_TIMEZONE = 'Europe/Kyiv';
 export const RATES_JOB_RETRIES = 3;
 export const RATES_JOB_RETRY_DELAY_MS = 10 * 60 * 1000;
@@ -45,7 +45,7 @@ export async function runWithRetries(
 }
 
 export function startRatesJob(
-  service: Pick<RatesService, 'catchUp'>,
+  service: Pick<RatesService, 'updateToday'>,
   logger: FastifyBaseLogger,
   timeZone = RATES_CRON_TIMEZONE,
 ): ScheduledTask {
@@ -53,7 +53,7 @@ export function startRatesJob(
     RATES_CRON_EXPRESSION,
     async () => {
       try {
-        await runWithRetries(() => service.catchUp(), {
+        await runWithRetries(() => service.updateToday(), {
           maxRetries: RATES_JOB_RETRIES,
           retryDelayMs: RATES_JOB_RETRY_DELAY_MS,
           onRetry: (error, retry) => {

@@ -23,11 +23,11 @@ describe('analytics calculations', () => {
         '2026-10-20',
       ),
     ).toEqual([
-      { date: '2026-10-16', rate: 41 },
-      { date: '2026-10-17', rate: 41 },
-      { date: '2026-10-18', rate: 41 },
-      { date: '2026-10-19', rate: 41.2 },
-      { date: '2026-10-20', rate: 41.2 },
+      { date: '2026-10-16', rate: 41, estimated: false },
+      { date: '2026-10-17', rate: 41, estimated: true },
+      { date: '2026-10-18', rate: 41, estimated: true },
+      { date: '2026-10-19', rate: 41.2, estimated: false },
+      { date: '2026-10-20', rate: 41.2, estimated: true },
     ]);
   });
 
@@ -39,8 +39,8 @@ describe('analytics calculations', () => {
         '2026-10-20',
       ),
     ).toEqual([
-      { date: '2026-10-19', rate: 41.2 },
-      { date: '2026-10-20', rate: 41.2 },
+      { date: '2026-10-19', rate: 41.2, estimated: false },
+      { date: '2026-10-20', rate: 41.2, estimated: true },
     ]);
   });
 

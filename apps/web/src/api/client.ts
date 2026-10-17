@@ -7,6 +7,7 @@ import {
   createPositionSchema,
   positionSchema,
   rateSchema,
+  rateRefreshResponseSchema,
   ratesQuerySchema,
 } from '@my-savings/shared';
 import type {
@@ -18,6 +19,7 @@ import type {
   CreatePositionInput,
   Position,
   Rate,
+  RateRefreshResponse,
   RatesQuery,
 } from '@my-savings/shared';
 import { getApiToken } from './settings.js';
@@ -178,6 +180,12 @@ export const api = {
   getRates(query: RatesQuery = {}): Promise<Rate[]> {
     const validatedQuery = ratesQuerySchema.parse(query);
     return requestJson(`/rates${toSearchParams(validatedQuery)}`, ratesSchema);
+  },
+
+  refreshRate(): Promise<RateRefreshResponse> {
+    return requestJson('/rates/refresh', rateRefreshResponseSchema, {
+      method: 'POST',
+    });
   },
 
   getAnalytics(query: AnalyticsQuery): Promise<AnalyticsResponse> {

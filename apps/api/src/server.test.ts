@@ -8,15 +8,18 @@ const today = '2026-10-16';
 const fetchedAt = '2026-10-16T13:00:00.000Z';
 let app: ReturnType<typeof createServer>;
 let getRate: ReturnType<typeof vi.fn>;
+let monobankGetRate: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   getRate = vi.fn(async (date: string) => ({
     date,
     currency: 'USD',
-    rate: 41.5,
-    source: 'NBU',
+    rateBuy: 41.5,
+    rateSell: null,
+    source: 'nbu',
     fetchedAt,
   }));
+  monobankGetRate = vi.fn();
   app = createServer(
     {
       API_TOKEN: apiToken,
@@ -28,7 +31,9 @@ beforeEach(() => {
       logger: false,
       enableRatesJobs: false,
       rateProvider: { getRate },
+      monobankRateProvider: { getRate: monobankGetRate },
       getToday: () => today,
+      now: () => new Date('2026-10-16T13:04:00.000Z'),
     },
   );
 });
@@ -45,6 +50,162 @@ describe('API routes', () => {
     expect(response.json()).toEqual({ status: 'ok' });
   });
 
+  it('returns a fresh stored Monobank row without calling the provider', async () => {
+    app.db
+      .insert(rates)
+      .values({
+        date: today,
+        currency: 'USD',
+        rateBuy: 41.5,
+        rateSell: 41.7,
+        source: 'mono',
+        fetchedAt: '2026-10-16T13:00:00.000Z',
+      })
+      .run();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/rates/refresh',
+      headers: authHeaders,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      date: today,
+      rateBuy: 41.5,
+      rateSell: 41.7,
+      fetchedAt: '2026-10-16T13:00:00.000Z',
+      stale: false,
+    });
+    expect(monobankGetRate).not.toHaveBeenCalled();
+  });
+
+  it('refreshes and stores an old Monobank row', async () => {
+    app.db
+      .insert(rates)
+      .values({
+        date: today,
+        currency: 'USD',
+        rateBuy: 40,
+        rateSell: 40.5,
+        source: 'mono',
+        fetchedAt: '2026-10-16T12:00:00.000Z',
+      })
+      .run();
+    monobankGetRate.mockResolvedValue({
+      date: today,
+      currency: 'USD',
+      rateBuy: 41.8,
+      rateSell: 42,
+      source: 'mono',
+      fetchedAt: fetchedAt,
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/rates/refresh',
+      headers: authHeaders,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      date: today,
+      rateBuy: 41.8,
+      rateSell: 42,
+      fetchedAt: '2026-10-16T13:04:00.000Z',
+      stale: false,
+    });
+    expect(monobankGetRate).toHaveBeenCalledExactlyOnceWith(today);
+    expect(app.db.select().from(rates).all()).toHaveLength(1);
+  });
+
+  it('shares one provider request across ten parallel refresh requests', async () => {
+    app.db
+      .insert(rates)
+      .values({
+        date: today,
+        currency: 'USD',
+        rateBuy: 40,
+        rateSell: 40.5,
+        source: 'mono',
+        fetchedAt: '2026-10-16T12:00:00.000Z',
+      })
+      .run();
+    monobankGetRate.mockImplementation(
+      async () =>
+        new Promise((resolve) => {
+          setTimeout(
+            () =>
+              resolve({
+                date: today,
+                currency: 'USD',
+                rateBuy: 41.8,
+                rateSell: 42,
+                source: 'mono',
+                fetchedAt,
+              }),
+            10,
+          );
+        }),
+    );
+
+    const responses = await Promise.all(
+      Array.from({ length: 10 }, () =>
+        app.inject({
+          method: 'POST',
+          url: '/rates/refresh',
+          headers: authHeaders,
+        }),
+      ),
+    );
+
+    expect(responses.every(({ statusCode }) => statusCode === 200)).toBe(true);
+    expect(responses.map(({ json }) => json().stale)).toEqual(
+      Array.from({ length: 10 }, () => false),
+    );
+    expect(monobankGetRate).toHaveBeenCalledExactlyOnceWith(today);
+  });
+
+  it('returns a stale cached row when the provider fails', async () => {
+    app.db
+      .insert(rates)
+      .values({
+        date: today,
+        currency: 'USD',
+        rateBuy: 40,
+        rateSell: 40.5,
+        source: 'mono',
+        fetchedAt: '2026-10-16T12:00:00.000Z',
+      })
+      .run();
+    monobankGetRate.mockRejectedValue(new Error('Network unavailable'));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/rates/refresh',
+      headers: authHeaders,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      date: today,
+      rateBuy: 40,
+      rateSell: 40.5,
+      fetchedAt: '2026-10-16T12:00:00.000Z',
+      stale: true,
+    });
+  });
+
+  it('requires authentication to refresh rates', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/rates/refresh',
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(monobankGetRate).not.toHaveBeenCalled();
+  });
+
   it('clears rates, positions, and balance events through authenticated DELETE /data', async () => {
     app.db
       .insert(positions)
@@ -59,8 +220,9 @@ describe('API routes', () => {
       .values({
         date: today,
         currency: 'USD',
-        rate: 41.5,
-        source: 'NBU',
+        rateBuy: 41.5,
+        rateSell: null,
+        source: 'nbu',
         fetchedAt,
       })
       .run();
@@ -138,12 +300,14 @@ describe('API routes', () => {
       note: 'Initial position',
     });
     expect(getRate).toHaveBeenCalledExactlyOnceWith(today);
+    expect(monobankGetRate).not.toHaveBeenCalled();
     expect(app.db.select().from(rates).all()).toEqual([
       {
         date: today,
         currency: 'USD',
-        rate: 41.5,
-        source: 'NBU',
+        rateBuy: 41.5,
+        rateSell: null,
+        source: 'nbu',
         fetchedAt,
       },
     ]);
@@ -187,15 +351,17 @@ describe('API routes', () => {
         {
           date: '2026-10-15',
           currency: 'USD',
-          rate: 41.25,
-          source: 'NBU',
+          rateBuy: 41.25,
+          rateSell: null,
+          source: 'nbu',
           fetchedAt,
         },
         {
           date: today,
           currency: 'USD',
-          rate: 41.5,
-          source: 'NBU',
+          rateBuy: 41.5,
+          rateSell: null,
+          source: 'nbu',
           fetchedAt,
         },
       ])
@@ -212,8 +378,9 @@ describe('API routes', () => {
       {
         date: today,
         currency: 'USD',
-        rate: 41.5,
-        source: 'NBU',
+        rateBuy: 41.5,
+        rateSell: null,
+        source: 'nbu',
         fetchedAt,
       },
     ]);
@@ -238,8 +405,9 @@ describe('API routes', () => {
       .values({
         date: today,
         currency: 'USD',
-        rate: 41,
-        source: 'NBU',
+        rateBuy: 41,
+        rateSell: null,
+        source: 'nbu',
         fetchedAt,
       })
       .run();
@@ -252,7 +420,15 @@ describe('API routes', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
-      series: [{ date: today, rate: 41, usd: 1_000, uah: 41_000 }],
+      series: [
+        {
+          date: today,
+          rate: 41,
+          usd: 1_000,
+          uah: 41_000,
+          estimated: true,
+        },
+      ],
       daily: { uahChange: null, rateChange: null },
       period: { uahChange: 0 },
       pnl: {
@@ -269,5 +445,60 @@ describe('API routes', () => {
         movingAverage30: null,
       },
     });
+  });
+
+  it('prefers the stored Monobank buy rate over the NBU fallback', async () => {
+    app.db
+      .insert(positions)
+      .values({ currency: 'USD', baseDate: today, baseRate: 40, note: null })
+      .run();
+    app.db
+      .insert(balanceEvents)
+      .values({
+        positionId: 1,
+        date: today,
+        deltaCents: 100_000,
+        note: null,
+      })
+      .run();
+    app.db
+      .insert(rates)
+      .values([
+        {
+          date: today,
+          currency: 'USD',
+          rateBuy: 41,
+          rateSell: null,
+          source: 'nbu',
+          fetchedAt,
+        },
+        {
+          date: today,
+          currency: 'USD',
+          rateBuy: 42,
+          rateSell: 42.5,
+          source: 'mono',
+          fetchedAt,
+        },
+      ])
+      .run();
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/analytics?positionId=1&from=${today}&to=${today}`,
+      headers: authHeaders,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().series).toEqual([
+      {
+        date: today,
+        rate: 42,
+        usd: 1_000,
+        uah: 42_000,
+        estimated: false,
+      },
+    ]);
+    expect(monobankGetRate).not.toHaveBeenCalled();
   });
 });

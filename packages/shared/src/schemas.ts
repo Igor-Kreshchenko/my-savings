@@ -31,9 +31,18 @@ const currencySchema = z.string().regex(/^[A-Z]{3}$/);
 export const rateSchema = z.object({
   date: dateSchema,
   currency: currencySchema,
-  rate: z.number().positive(),
+  rateBuy: z.number().positive(),
+  rateSell: z.number().positive().nullable(),
   source: z.string().min(1),
   fetchedAt: z.string().datetime({ offset: true }),
+});
+
+export const rateRefreshResponseSchema = z.object({
+  date: dateSchema,
+  rateBuy: z.number().positive(),
+  rateSell: z.number().positive().nullable(),
+  fetchedAt: z.string().datetime({ offset: true }),
+  stale: z.boolean(),
 });
 
 export const positionSchema = z.object({
@@ -100,6 +109,7 @@ export const analyticsResponseSchema = z.object({
       rate: z.number().positive(),
       usd: z.number().nonnegative(),
       uah: z.number().nonnegative(),
+      estimated: z.boolean(),
     }),
   ),
   daily: z.object({
