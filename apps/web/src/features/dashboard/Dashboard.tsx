@@ -5,6 +5,7 @@ import {
   Line,
   LineChart,
   ReferenceDot,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -22,6 +23,11 @@ import {
 } from '../../api/queries.js';
 import { addCalendarDays, getTodayInKyiv } from '../../lib/dates.js';
 import { parseUsdAmountToCents } from './parse-usd-cents.js';
+import {
+  getRateHistoryPage,
+  sortRatesByDate,
+  type RateSortDirection,
+} from './rate-history.js';
 
 const periods = [
   { label: '7d', days: 7 },
@@ -74,13 +80,13 @@ function formatDate(date: string, formatter: Intl.DateTimeFormat): string {
   return formatter.format(new Date(`${date}T00:00:00.000Z`));
 }
 
-function getRangeStart(
+function getRequestedRangeStart(
   period: Period,
-  position: Position,
+  baseDate: string,
   today: string,
 ): string {
   if (period === 'all') {
-    return position.baseDate;
+    return baseDate;
   }
 
   const days = periods.find(({ label }) => label === period)?.days;
@@ -88,7 +94,19 @@ function getRangeStart(
     throw new Error(`Unsupported dashboard period: ${period}`);
   }
 
-  const requestedStart = addCalendarDays(today, -(days - 1));
+  return addCalendarDays(today, -(days - 1));
+}
+
+function getRangeStart(
+  period: Period,
+  position: Position,
+  today: string,
+): string {
+  const requestedStart = getRequestedRangeStart(
+    period,
+    position.baseDate,
+    today,
+  );
   return requestedStart < position.baseDate
     ? position.baseDate
     : requestedStart;
@@ -258,11 +276,9 @@ function EmptyState({
 function ChartTooltip({
   active,
   payload,
-  label,
 }: {
   active?: boolean;
   payload?: Array<{ payload: AnalyticsResponse['series'][number] }>;
-  label?: string;
 }) {
   const point = payload?.[0]?.payload;
   if (!active || point === undefined) {
@@ -271,9 +287,11 @@ function ChartTooltip({
 
   return (
     <div className="chart-tooltip">
-      <strong>{label ? formatDate(label, fullDateFormatter) : ''}</strong>
-      <span>{uahFormatter.format(point.uah)}</span>
-      <span>{usdFormatter.format(point.usd)}</span>
+      <strong>{formatDate(point.date, fullDateFormatter)}</strong>
+      <span>
+        FX profit / loss: {point.pnlUah > 0 ? '+' : ''}
+        {uahFormatter.format(point.pnlUah)}
+      </span>
       <span>Rate buy {rateFormatter.format(point.rate)} UAH / USD</span>
       {point.estimated && <span>Estimated rate</span>}
     </div>
@@ -287,9 +305,24 @@ function RateHistory({
   position: Position;
   today: string;
 }) {
+  const pageSize = 10;
+  const [sortDirection, setSortDirection] = useState<RateSortDirection>('desc');
+  const [page, setPage] = useState(0);
   const ratesQuery = useRates(
     { from: position.baseDate, to: today },
     { enabled: true },
+  );
+  const sortedRates =
+    ratesQuery.data === undefined
+      ? []
+      : sortRatesByDate(ratesQuery.data, sortDirection);
+  const pageCount = Math.ceil(sortedRates.length / pageSize);
+  const currentPage = Math.min(page, Math.max(0, pageCount - 1));
+  const visibleRates = getRateHistoryPage(sortedRates, currentPage, pageSize);
+  const firstVisibleRate = currentPage * pageSize + 1;
+  const lastVisibleRate = Math.min(
+    (currentPage + 1) * pageSize,
+    sortedRates.length,
   );
 
   return (
@@ -324,30 +357,73 @@ function RateHistory({
           <table className="history-table">
             <thead>
               <tr>
-                <th scope="col">Date</th>
+                <th
+                  scope="col"
+                  aria-sort={
+                    sortDirection === 'asc' ? 'ascending' : 'descending'
+                  }
+                >
+                  <button
+                    className="table-sort-button"
+                    type="button"
+                    onClick={() => {
+                      setSortDirection((direction) =>
+                        direction === 'asc' ? 'desc' : 'asc',
+                      );
+                      setPage(0);
+                    }}
+                  >
+                    Date
+                    <span className="table-sort-indicator" aria-hidden="true">
+                      {sortDirection === 'asc' ? '↑' : '↓'}
+                    </span>
+                  </button>
+                </th>
                 <th scope="col">Buy / sell (UAH / USD)</th>
                 <th scope="col">Source</th>
               </tr>
             </thead>
             <tbody>
-              {[...ratesQuery.data]
-                .sort((left, right) => right.date.localeCompare(left.date))
-                .map((rate) => (
-                  <tr key={`${rate.date}-${rate.currency}-${rate.source}`}>
-                    <td>{formatDate(rate.date, fullDateFormatter)}</td>
-                    <td>
-                      {rateFormatter.format(rate.rateBuy)}
-                      {rate.rateSell === null
-                        ? ''
-                        : ` / ${rateFormatter.format(rate.rateSell)}`}
-                    </td>
-                    <td>
-                      {rate.source === 'mono' ? 'Monobank' : 'NBU fallback'}
-                    </td>
-                  </tr>
-                ))}
+              {visibleRates.map((rate) => (
+                <tr key={`${rate.date}-${rate.currency}-${rate.source}`}>
+                  <td>{formatDate(rate.date, fullDateFormatter)}</td>
+                  <td>
+                    {rateFormatter.format(rate.rateBuy)}
+                    {rate.rateSell === null
+                      ? ''
+                      : ` / ${rateFormatter.format(rate.rateSell)}`}
+                  </td>
+                  <td>
+                    {rate.source === 'mono' ? 'Monobank' : 'NBU fallback'}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
+          {pageCount > 1 && (
+            <nav className="history-pagination" aria-label="Rate history pages">
+              <span>
+                Showing {firstVisibleRate}–{lastVisibleRate} of{' '}
+                {sortedRates.length} · Page {currentPage + 1} of {pageCount}
+              </span>
+              <div className="history-pagination-controls">
+                <button
+                  type="button"
+                  onClick={() => setPage(currentPage - 1)}
+                  disabled={currentPage === 0}
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage(currentPage + 1)}
+                  disabled={currentPage >= pageCount - 1}
+                >
+                  Next
+                </button>
+              </div>
+            </nav>
+          )}
         </div>
       )}
       <p className="chart-caption">
@@ -494,7 +570,7 @@ function PositionTools({
 }) {
   return (
     <>
-      <RateHistory position={position} today={today} />
+      <RateHistory key={position.id} position={position} today={today} />
       <BalanceEventForm position={position} today={today} />
     </>
   );
@@ -645,6 +721,17 @@ export function Dashboard({ onOpenSettings }: { onOpenSettings: () => void }) {
     .at(-1);
   const rateFetchedAt =
     rateRefresh.data?.fetchedAt ?? latestStoredMonobankRate?.fetchedAt;
+  const chartStartDate = getRequestedRangeStart(
+    period,
+    selectedPosition.baseDate,
+    today,
+  );
+  const chartStartTimestamp = Date.parse(`${chartStartDate}T00:00:00.000Z`);
+  const chartEndTimestamp = Date.parse(`${today}T00:00:00.000Z`);
+  const chartData = analytics.series.map((point) => ({
+    ...point,
+    timestamp: Date.parse(`${point.date}T00:00:00.000Z`),
+  }));
 
   return (
     <div className="dashboard">
@@ -737,7 +824,7 @@ export function Dashboard({ onOpenSettings }: { onOpenSettings: () => void }) {
         <div className="panel-heading">
           <div>
             <p className="eyebrow">Performance</p>
-            <h2 id="chart-heading">Savings value</h2>
+            <h2 id="chart-heading">FX profit / loss</h2>
           </div>
           <div
             className="period-switch"
@@ -762,7 +849,7 @@ export function Dashboard({ onOpenSettings }: { onOpenSettings: () => void }) {
         <div className="chart-container">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
-              data={analytics.series}
+              data={chartData}
               margin={{ top: 10, right: 12, bottom: 0, left: 4 }}
             >
               <CartesianGrid
@@ -771,9 +858,17 @@ export function Dashboard({ onOpenSettings }: { onOpenSettings: () => void }) {
                 vertical={false}
               />
               <XAxis
-                dataKey="date"
-                tickFormatter={(value: string) =>
-                  formatDate(value, compactDateFormatter)
+                dataKey="timestamp"
+                type="number"
+                scale="time"
+                domain={[chartStartTimestamp, chartEndTimestamp]}
+                allowDataOverflow
+                tickCount={period === '7d' ? 7 : 6}
+                tickFormatter={(value: number) =>
+                  formatDate(
+                    new Date(value).toISOString().slice(0, 10),
+                    compactDateFormatter,
+                  )
                 }
                 tickLine={false}
                 axisLine={false}
@@ -792,14 +887,19 @@ export function Dashboard({ onOpenSettings }: { onOpenSettings: () => void }) {
                 axisLine={false}
                 tick={{ fill: 'var(--chart-label)', fontSize: 12 }}
               />
+              <ReferenceLine
+                y={0}
+                stroke="var(--chart-label)"
+                strokeDasharray="4 4"
+              />
               <Tooltip content={<ChartTooltip />} />
-              {analytics.series
+              {chartData
                 .filter(({ estimated }) => estimated)
                 .map((point) => (
                   <ReferenceDot
                     key={`estimated-${point.date}`}
-                    x={point.date}
-                    y={point.uah}
+                    x={point.timestamp}
+                    y={point.pnlUah}
                     r={4}
                     fill="var(--surface)"
                     stroke="var(--accent)"
@@ -809,8 +909,8 @@ export function Dashboard({ onOpenSettings }: { onOpenSettings: () => void }) {
                 ))}
               <Line
                 type="monotone"
-                dataKey="uah"
-                name="Savings value"
+                dataKey="pnlUah"
+                name="FX profit / loss"
                 stroke="var(--accent)"
                 strokeWidth={3}
                 dot={false}
@@ -821,7 +921,8 @@ export function Dashboard({ onOpenSettings }: { onOpenSettings: () => void }) {
           </ResponsiveContainer>
         </div>
         <p className="chart-caption">
-          Hollow markers indicate estimated NBU or carried-forward rates.
+          Shows cumulative currency profit or loss, excluding deposits and
+          withdrawals. Hollow markers indicate estimated rates.
         </p>
       </section>
 

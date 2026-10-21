@@ -6,6 +6,7 @@ import {
   calculateEventPnl,
   calculatePeriodChange,
   calculatePnl,
+  calculatePnlSeries,
   calculateStats,
   calculateValue,
   forwardFillRates,
@@ -117,6 +118,30 @@ describe('analytics calculations', () => {
       cashFlowUah: 0,
     });
     expect(pnl.netPercent).toBeCloseTo(0.05);
+  });
+
+  it('builds a cash-flow-adjusted FX PnL series', () => {
+    const events = [
+      { date: '2026-10-01', deltaCents: 10_000 },
+      { date: '2026-10-02', deltaCents: 1_000 },
+      { date: '2026-10-03', deltaCents: -500 },
+    ];
+    const rates = [
+      { date: '2026-10-01', rate: 40 },
+      { date: '2026-10-02', rate: 42 },
+      { date: '2026-10-03', rate: 43 },
+      { date: '2026-10-05', rate: 44 },
+    ];
+
+    expect(
+      calculatePnlSeries(
+        events,
+        rates,
+        ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-05'],
+        10_000,
+        40,
+      ),
+    ).toEqual([0, 200, 310, 415]);
   });
 
   it('uses the latest prior rate for an event on a weekend', () => {

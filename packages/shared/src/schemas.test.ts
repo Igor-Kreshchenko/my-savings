@@ -86,6 +86,7 @@ describe('shared schemas', () => {
             rate: 41.2,
             usd: 100,
             uah: 4120,
+            pnlUah: 120,
             estimated: false,
           },
         ],

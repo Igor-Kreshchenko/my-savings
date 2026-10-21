@@ -230,6 +230,66 @@ export function calculatePnl(
   };
 }
 
+export function calculatePnlSeries(
+  events: readonly BalanceEventPoint[],
+  rates: readonly RatePoint[],
+  dates: readonly string[],
+  baseAmountCents: number,
+  baseRate: number,
+): number[] {
+  if (!Number.isSafeInteger(baseAmountCents)) {
+    throw new RangeError('baseAmountCents must be a safe integer');
+  }
+
+  const sortedEvents = events
+    .map((event) => {
+      const date = dateSchema.parse(event.date);
+      if (!Number.isSafeInteger(event.deltaCents) || event.deltaCents === 0) {
+        throw new RangeError(
+          'Balance event deltaCents must be a non-zero safe integer',
+        );
+      }
+      return { date, deltaCents: event.deltaCents };
+    })
+    .sort((left, right) => left.date.localeCompare(right.date));
+
+  let eventIndex = 0;
+  let balanceCents = 0;
+  let cashFlowUah = 0;
+  let previousDate: string | undefined;
+
+  return dates.map((rawDate) => {
+    const date = dateSchema.parse(rawDate);
+    if (previousDate !== undefined && date < previousDate) {
+      throw new RangeError('PnL series dates must be in ascending order');
+    }
+    previousDate = date;
+
+    if (sortedEvents.length === 0) {
+      return calculateBasePnl(
+        baseAmountCents,
+        baseRate,
+        rateAtDate(rates, date),
+      ).netUah;
+    }
+
+    while (eventIndex < sortedEvents.length) {
+      const event = sortedEvents[eventIndex];
+      if (event === undefined || event.date > date) {
+        break;
+      }
+      balanceCents += event.deltaCents;
+      if (!Number.isSafeInteger(balanceCents)) {
+        throw new RangeError('Balance amount exceeds the safe integer range');
+      }
+      cashFlowUah += (event.deltaCents / 100) * rateAtDate(rates, event.date);
+      eventIndex += 1;
+    }
+
+    return (balanceCents / 100) * rateAtDate(rates, date) - cashFlowUah;
+  });
+}
+
 export function calculateStats(
   series: readonly Pick<DailyValuation, 'rate' | 'uah'>[],
 ): AnalyticsStats {

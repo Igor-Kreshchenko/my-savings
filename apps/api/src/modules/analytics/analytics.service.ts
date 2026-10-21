@@ -4,6 +4,7 @@ import {
   calculateDayOverDay,
   calculatePeriodChange,
   calculatePnl,
+  calculatePnlSeries,
   calculateStats,
   calculateValue,
   forwardFillRates,
@@ -54,6 +55,7 @@ export class AnalyticsService {
     const events = this.positions
       .listEvents(position.id)
       .map(({ date, deltaCents }) => ({ date, deltaCents }));
+    const baseAmountCents = amountAtDate(events, position.baseDate);
     const series = filledRates.map(({ date, rate, estimated }) => {
       const usdCents = amountAtDate(events, date);
       const usd = usdCents / 100;
@@ -65,13 +67,27 @@ export class AnalyticsService {
         estimated,
       };
     });
-    const first = series[0];
-    const last = series.at(-1);
+    const pnlValues = calculatePnlSeries(
+      events,
+      ratePoints,
+      series.map(({ date }) => date),
+      baseAmountCents,
+      position.baseRate,
+    );
+    const seriesWithPnl = series.map((point, index) => {
+      const pnlUah = pnlValues[index];
+      if (pnlUah === undefined) {
+        throw new Error('Analytics PnL series unexpectedly has no value');
+      }
+      return { ...point, pnlUah };
+    });
+    const first = seriesWithPnl[0];
+    const last = seriesWithPnl.at(-1);
     if (first === undefined || last === undefined) {
       throw new Error('Analytics series unexpectedly has no values');
     }
 
-    const previous = series.at(-2);
+    const previous = seriesWithPnl.at(-2);
     const pnl = calculatePnl(
       events,
       ratePoints,
@@ -80,11 +96,11 @@ export class AnalyticsService {
       position.baseRate,
     );
     return {
-      series,
+      series: seriesWithPnl,
       daily: calculateDayOverDay(last, previous),
       period: { uahChange: calculatePeriodChange(first, last) },
       pnl,
-      stats: calculateStats(series),
+      stats: calculateStats(seriesWithPnl),
     };
   }
 }

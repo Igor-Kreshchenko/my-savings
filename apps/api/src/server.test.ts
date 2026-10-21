@@ -427,6 +427,7 @@ describe('API routes', () => {
           usd: 1_000,
           uah: 41_000,
           estimated: true,
+          pnlUah: 0,
         },
       ],
       daily: { uahChange: null, rateChange: null },
@@ -497,6 +498,7 @@ describe('API routes', () => {
         usd: 1_000,
         uah: 42_000,
         estimated: false,
+        pnlUah: 0,
       },
     ]);
     expect(monobankGetRate).not.toHaveBeenCalled();

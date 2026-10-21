@@ -109,6 +109,7 @@ export const analyticsResponseSchema = z.object({
       rate: z.number().positive(),
       usd: z.number().nonnegative(),
       uah: z.number().nonnegative(),
+      pnlUah: z.number(),
       estimated: z.boolean(),
     }),
   ),

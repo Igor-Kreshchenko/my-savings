@@ -147,10 +147,32 @@ a:focus-visible {
 }
 
 .icon-button {
+  display: grid;
   width: 44px;
+  height: 44px;
+  place-items: center;
+  padding: 0;
   border: 1px solid var(--border);
   border-radius: 50%;
-  font-size: 20px;
+  line-height: 0;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+
+.icon-button:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  transform: rotate(-8deg);
+}
+
+.icon-button svg {
+  display: block;
+  width: 21px;
+  height: 21px;
 }
 
 .settings-button {
@@ -618,12 +640,66 @@ a:focus-visible {
   font-weight: 700;
 }
 
+.table-sort-button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+}
+
+.table-sort-button:hover {
+  color: var(--accent);
+}
+
+.table-sort-indicator {
+  color: var(--accent);
+  font-size: 15px;
+}
+
 .history-table td:nth-child(2) {
   font-variant-numeric: tabular-nums;
 }
 
 .history-table tbody tr:last-child td {
   border-bottom: 0;
+}
+
+.history-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.history-pagination-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.history-pagination button {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.history-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .balance-event-form {

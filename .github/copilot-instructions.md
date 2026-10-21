@@ -69,13 +69,13 @@ For date t: A(t) = USD amount, R(t) = rate, V(t) = A(t) * R(t).
 - `POST /rates/refresh` (authenticated) returns `{ date, rateBuy, rateSell, fetchedAt, stale }`; use the stored Monobank row if refreshed within 5 minutes, otherwise refresh Monobank with single-flight and a 60-second request limit, falling back to a stale stored row on provider errors.
 - `GET /positions`, `POST /positions`
 - `POST /positions/:id/events`
-- `GET /analytics?positionId&from&to` -> `{ series: [{date, rate, usd, uah, estimated}], daily, period, pnl, stats }`; `rate` is Monobank `rate_buy` when present and each estimate is marked.
+- `GET /analytics?positionId&from&to` -> `{ series: [{date, rate, usd, uah, pnlUah, estimated}], daily, period, pnl, stats }`; `rate` is Monobank `rate_buy` when present, `pnlUah` is cumulative FX profit/loss excluding cash flows, and each estimate is marked.
 - All except `/health` require `Authorization: Bearer <API_TOKEN>`. CORS limited to the app origin (or disabled when nginx serves both).
 - The web app calls the refresh endpoint on startup and when the tab becomes visible, at most once per 60 seconds, then invalidates analytics and rates. It displays the fetched time in Europe/Kyiv and keeps persisted cached data available with an offline/outdated status if refresh fails. The service worker must not intercept or cache the POST refresh request.
 
 ## Frontend rules
 - Mobile-first, one-column layout, touch targets >= 44px, supports dark mode.
-- Main screen: current UAH equivalent, PnL (green/red, abs + %), chart with 7d/30d/90d/All toggle. Then rate history table and a deposit/withdraw form.
+- Main screen: current UAH equivalent, PnL (green/red, abs + %), FX profit/loss chart with a fixed 7d/30d/90d/All date domain. Then a paginated, date-sortable rate history table and a deposit/withdraw form.
 - Data fetching only through TanStack Query hooks in `api/`; persist the query cache for offline viewing.
 - Format money with `Intl.NumberFormat('uk-UA')`. Show loading, empty and error states.
 - PWA: manifest (`display: standalone`, icons 192/512, theme color), precache static assets, runtime cache for GET API data.
